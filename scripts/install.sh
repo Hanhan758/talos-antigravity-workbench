@@ -8,10 +8,13 @@ LAUNCHER_SRC="$REPO_ROOT/launcher/main.m"
 
 APP_PATH="/Applications/Antigravity.app"
 DEST_APP="$HOME/Applications/Antigravity 中文.app"
+RUNTIME_DIR="$HOME/Library/Application Support/talos-antigravity-workbench/runtime"
 DISPLAY_NAME="Antigravity 中文"
 BUNDLE_ID="local.antigravity.zh-launcher"
 EXECUTABLE_NAME="AntigravityWorkbench"
+SIGN_IDENTITY="-"
 NO_COMPILE=0
+REBUILD_LAUNCHER=0
 DRY_RUN=0
 
 usage() {
@@ -19,14 +22,19 @@ usage() {
 用法: ./scripts/install.sh [选项]
 
 在 ~/Applications/ 下生成轻量 macOS 启动器，复用原版 Antigravity 图标，不改动原版应用包。
+运行时源码部署在独立目录（~/Library/Application Support/talos-antigravity-workbench/runtime），
+后续更新主题、汉化或脚本不会重签启动器 .app，避免 macOS TCC（文稿/桌面授权）反复弹窗。
 
 选项:
-  --app <路径>        指定原版 Antigravity.app 路径（默认: /Applications/Antigravity.app）
-  --dest <路径>       指定生成的启动器 .app 路径（默认: ~/Applications/Antigravity 中文.app）
-  --name <名称>       指定启动器显示名称（默认: Antigravity 中文）
-  --no-compile        跳过 clang 编译，使用轻量 shell 启动入口
-  --dry-run           仅检查环境并打印将执行的操作，不写入文件
-  -h, --help          显示帮助
+  --app <路径>          指定原版 Antigravity.app 路径（默认: /Applications/Antigravity.app）
+  --dest <路径>         指定生成的启动器 .app 路径（默认: ~/Applications/Antigravity 中文.app）
+  --runtime <路径>      指定运行时脚本部署目录（默认: ~/Library/Application Support/talos-antigravity-workbench/runtime）
+  --name <名称>         指定启动器显示名称（默认: Antigravity 中文）
+  --sign <签名身份>     指定 codesign 签名身份（默认: - 本地 ad-hoc；可填本机自签证书名进一步固定 TCC 身份）
+  --rebuild-launcher    强制重建并重签启动器 .app（即使启动器外壳未变化）
+  --no-compile          跳过 clang 编译，使用轻量 shell 启动入口
+  --dry-run             仅检查环境并打印将执行的操作，不写入文件
+  -h, --help            显示帮助
 EOF
 }
 
@@ -34,7 +42,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --app) APP_PATH="$2"; shift 2 ;;
     --dest) DEST_APP="$2"; shift 2 ;;
+    --runtime) RUNTIME_DIR="$2"; shift 2 ;;
     --name) DISPLAY_NAME="$2"; shift 2 ;;
+    --sign) SIGN_IDENTITY="$2"; shift 2 ;;
+    --rebuild-launcher) REBUILD_LAUNCHER=1; shift ;;
     --no-compile) NO_COMPILE=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -73,8 +84,10 @@ if [[ "$ICON_FILE" != *.icns && -f "$APP_PATH/Contents/Resources/${ICON_FILE}.ic
 fi
 ICON_SRC="$APP_PATH/Contents/Resources/$ICON_FILE"
 HAS_ICON=0
+ICON_HASH="none"
 if [[ -f "$ICON_SRC" ]]; then
   HAS_ICON=1
+  ICON_HASH="$(shasum -a 256 "$ICON_SRC" | awk '{print $1}')"
 fi
 
 USE_CLANG=0
@@ -82,35 +95,57 @@ if [[ "$NO_COMPILE" -eq 0 ]] && command -v clang >/dev/null 2>&1 && [[ -f "$LAUN
   USE_CLANG=1
 fi
 
+LAUNCHER_HASH="$(
+  {
+    printf '%s\n' "$DISPLAY_NAME" "$BUNDLE_ID" "$EXECUTABLE_NAME" "$SIGN_IDENTITY" "$USE_CLANG" "$ICON_FILE" "$ICON_HASH"
+    [[ -f "$LAUNCHER_SRC" ]] && cat "$LAUNCHER_SRC"
+  } | shasum -a 256 | awk '{print $1}'
+)"
+
+HASH_FILE="$(dirname "$RUNTIME_DIR")/launcher.sha256"
+NEED_BUILD_APP=1
+if [[ "$REBUILD_LAUNCHER" -eq 0 && -d "$DEST_APP" && -f "$HASH_FILE" ]]; then
+  SAVED_HASH="$(cat "$HASH_FILE" 2>/dev/null || true)"
+  if [[ "$SAVED_HASH" == "$LAUNCHER_HASH" ]] && codesign --verify --deep --strict "$DEST_APP" >/dev/null 2>&1; then
+    NEED_BUILD_APP=0
+  fi
+fi
+
 echo "==> TALOS Antigravity Workbench 安装检查"
 echo "    原版应用: $APP_PATH"
+echo "    运行时目录: $RUNTIME_DIR"
 echo "    目标启动器: $DEST_APP"
 echo "    复用图标: $( [[ $HAS_ICON -eq 1 ]] && echo "$ICON_SRC" || echo "未找到（将使用系统默认图标）" )"
-echo "    启动入口: $( [[ $USE_CLANG -eq 1 ]] && echo "原生 Mach-O (clang)" || echo "轻量 Shell 启动脚本" )"
+echo "    启动器外壳: $( [[ $NEED_BUILD_APP -eq 0 ]] && echo "复用现有签名外壳（保持 CDHash 不变，避免重复 TCC 弹窗）" || ( [[ $USE_CLANG -eq 1 ]] && echo "构建原生 Mach-O (clang)" || echo "构建轻量 Shell 启动脚本" ) )"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "[dry-run] 检查通过，未写入任何文件。"
   exit 0
 fi
 
+# 1. 原子更新运行时源码目录（不触碰 .app 签名）
 STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/talos-ag-workbench.XXXXXX")"
 trap 'rm -rf "$STAGE_DIR"' EXIT
 
-STAGE_APP="$STAGE_DIR/$(basename "$DEST_APP")"
-mkdir -p "$STAGE_APP/Contents/MacOS" "$STAGE_APP/Contents/Resources"
+mkdir -p "$(dirname "$RUNTIME_DIR")"
+STAGE_RUNTIME="$STAGE_DIR/runtime"
+mkdir -p "$STAGE_RUNTIME"
+cp "$SRC_DIR"/* "$STAGE_RUNTIME/"
+rm -rf "$RUNTIME_DIR"
+mv "$STAGE_RUNTIME" "$RUNTIME_DIR"
 
-# 复制全部运行时源码
-cp "$SRC_DIR"/* "$STAGE_APP/Contents/Resources/"
+# 2. 仅在首次安装、启动器外壳变更或 --rebuild-launcher 时构建并签名 .app
+if [[ "$NEED_BUILD_APP" -eq 1 ]]; then
+  STAGE_APP="$STAGE_DIR/$(basename "$DEST_APP")"
+  mkdir -p "$STAGE_APP/Contents/MacOS" "$STAGE_APP/Contents/Resources"
 
-# 复用原版图标
-ICON_PLIST_ENTRY=""
-if [[ "$HAS_ICON" -eq 1 ]]; then
-  cp "$ICON_SRC" "$STAGE_APP/Contents/Resources/$ICON_FILE"
-  ICON_PLIST_ENTRY=$'\t<key>CFBundleIconFile</key>\n\t<string>'"$ICON_FILE"$'</string>'
-fi
+  ICON_PLIST_ENTRY=""
+  if [[ "$HAS_ICON" -eq 1 ]]; then
+    cp "$ICON_SRC" "$STAGE_APP/Contents/Resources/$ICON_FILE"
+    ICON_PLIST_ENTRY=$'\t<key>CFBundleIconFile</key>\n\t<string>'"$ICON_FILE"$'</string>'
+  fi
 
-# 生成 Info.plist
-cat > "$STAGE_APP/Contents/Info.plist" <<EOF
+  cat > "$STAGE_APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -136,15 +171,17 @@ ${ICON_PLIST_ENTRY}
 </plist>
 EOF
 
-# 构建轻量启动入口
-if [[ "$USE_CLANG" -eq 1 ]]; then
-  clang -fobjc-arc -O2 -framework Cocoa "$LAUNCHER_SRC" -o "$STAGE_APP/Contents/MacOS/$EXECUTABLE_NAME"
-else
-  cat > "$STAGE_APP/Contents/MacOS/$EXECUTABLE_NAME" <<'SHEOF'
+  if [[ "$USE_CLANG" -eq 1 ]]; then
+    clang -fobjc-arc -O2 -framework Cocoa "$LAUNCHER_SRC" -o "$STAGE_APP/Contents/MacOS/$EXECUTABLE_NAME"
+  else
+    cat > "$STAGE_APP/Contents/MacOS/$EXECUTABLE_NAME" <<'SHEOF'
 #!/bin/sh
 set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 RES_DIR="$(CDPATH= cd -- "$SCRIPT_DIR/../Resources" && pwd)"
+RUNTIME_DIR="${TALOS_AGW_RUNTIME:-$HOME/Library/Application Support/talos-antigravity-workbench/runtime}"
+LAUNCH_SCRIPT="$RUNTIME_DIR/launch.cjs"
+[ -f "$LAUNCH_SCRIPT" ] || LAUNCH_SCRIPT="$RES_DIR/launch.cjs"
 APP_PATH="${ANTIGRAVITY_APP_PATH:-/Applications/Antigravity.app}"
 if [ ! -d "$APP_PATH" ]; then
   /usr/bin/osascript -e 'display alert "未找到原版 Antigravity" message "请先安装 Google Antigravity。"' >/dev/null 2>&1 || true
@@ -166,22 +203,24 @@ if [ -z "$NODE_BIN" ] || [ ! -x "$NODE_BIN" ]; then
   exit 1
 fi
 export ANTIGRAVITY_APP_PATH="$APP_PATH"
-exec "$NODE_BIN" "$RES_DIR/launch.cjs"
+exec "$NODE_BIN" "$LAUNCH_SCRIPT"
 SHEOF
-  chmod 755 "$STAGE_APP/Contents/MacOS/$EXECUTABLE_NAME"
-fi
+    chmod 755 "$STAGE_APP/Contents/MacOS/$EXECUTABLE_NAME"
+  fi
 
-# 本地 ad-hoc 签名，避免 Gatekeeper 异常
-if command -v codesign >/dev/null 2>&1; then
-  codesign --force --deep --sign - "$STAGE_APP" >/dev/null 2>&1 || true
-fi
+  if command -v codesign >/dev/null 2>&1; then
+    codesign --force --deep --sign "$SIGN_IDENTITY" "$STAGE_APP" >/dev/null 2>&1 || true
+  fi
 
-mkdir -p "$(dirname "$DEST_APP")"
-rm -rf "$DEST_APP"
-mv "$STAGE_APP" "$DEST_APP"
-touch "$DEST_APP"
+  mkdir -p "$(dirname "$DEST_APP")"
+  rm -rf "$DEST_APP"
+  mv "$STAGE_APP" "$DEST_APP"
+  touch "$DEST_APP"
+  printf '%s\n' "$LAUNCHER_HASH" > "$HASH_FILE"
+fi
 
 echo "✅ 安装完成：$DEST_APP"
+echo "   - 运行时脚本目录：$RUNTIME_DIR"
 echo "   - 原版应用未被修改，可继续正常接收官方自动更新。"
+echo "   - 后续更新主题/汉化脚本不会重签启动器 .app，避免 macOS 重复弹出「文稿」权限提示。"
 echo "   - 请先完全退出正在运行的 Antigravity，再打开「$DISPLAY_NAME」即可生效。"
-echo "   - 可将其拖入程序坞（Dock）替代原图标使用。"

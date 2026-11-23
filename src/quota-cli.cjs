@@ -50,7 +50,11 @@ function parseUsage(output) {
 function runQuotaCommand(options,signal) {
   return new Promise((resolve,reject) => {
     if (signal.aborted) return reject(new Error('额度查询已取消'));
-    const args = ['-D','QUOTA_CLI='+cli,'-D','DOCUMENTS='+path.join(os.homedir(),'Documents'),
+    const home = os.homedir();
+    const args = ['-D','QUOTA_CLI='+cli,
+      '-D','DOCUMENTS='+path.join(home,'Documents'),
+      '-D','DESKTOP='+path.join(home,'Desktop'),
+      '-D','DOWNLOADS='+path.join(home,'Downloads'),
       '-f',path.join(__dirname,'quota-only.sb'),cli,'--disable-slash-commands=false','--settings','{"disableSlashCommands":false}',
       '-p','/usage','--output-format','json','--log-file','/dev/null','--print-timeout','25s'];
     const child = spawn('/usr/bin/sandbox-exec', args, {

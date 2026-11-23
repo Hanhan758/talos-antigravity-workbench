@@ -81,9 +81,17 @@ int main(int argc, const char *argv[]) {
       return 1;
     }
 
-    NSString *scriptPath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"launch.cjs"];
+    NSString *runtimeDir = proc.environment[@"TALOS_AGW_RUNTIME"];
+    if (runtimeDir.length == 0) {
+      runtimeDir = [NSHomeDirectory() stringByAppendingPathComponent:
+          @"Library/Application Support/talos-antigravity-workbench/runtime"];
+    }
+    NSString *scriptPath = [runtimeDir stringByAppendingPathComponent:@"launch.cjs"];
     if (![fm fileExistsAtPath:scriptPath]) {
-      showAlert(@"启动器文件不完整", @"缺少 launch.cjs，请重新运行 install.sh 安装。");
+      scriptPath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"launch.cjs"];
+    }
+    if (![fm fileExistsAtPath:scriptPath]) {
+      showAlert(@"启动器文件不完整", @"缺少运行时 launch.cjs，请重新运行 install.sh 安装。");
       return 1;
     }
 

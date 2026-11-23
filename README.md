@@ -63,6 +63,9 @@ chmod +x scripts/install.sh scripts/uninstall.sh
 ## 工作原理与安全边界
 
 - **无侵入**：通过 Electron 匿名调试管道（`--remote-debugging-pipe`）仅向本机 `https://127.0.0.1:<port>` 的 Antigravity 主窗口注入前端样式与脚本，不开启对外端口，不修改原版 `app.asar`。
+- **防 macOS「文稿」反复授权弹窗**：
+  - **动静分离（固定启动器 CDHash）**：运行时 JS/CSS 独立部署在 `~/Library/Application Support/talos-antigravity-workbench/runtime/`，启动器 `.app` 仅保留轻量外壳与原版图标；后续运行 `install.sh` 更新主题或汉化时不会重签 `.app`，避免 macOS TCC 因签名哈希变化而反复弹窗。如需彻底绑定证书身份，也支持 `--sign "<本机证书名>"`。
+  - **受限沙盒额度查询**：后台额度查询在 `sandbox-exec`（`quota-only.sb`）中运行，明确禁止读取 `Documents`、`Desktop`、`Downloads` 且禁止拉起外部 MCP 进程，并在退出时按进程组回收。
 - **原版签名校验**：启动器拉起前会使用 `codesign --verify --strict` 校验原版应用包签名。
 - **零数据上传**：所有汉化、主题与统计均在本地完成，不上传对话内容、账号信息或令牌。
 - **随时回退**：若官方大改版导致某项样式失效，直接打开 `/Applications/Antigravity.app` 即可无损回到原版。

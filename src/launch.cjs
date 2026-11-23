@@ -340,5 +340,8 @@ function finish(phase) {
 
 app.once('error', () => finish('launch-failed'));
 app.once('exit', () => finish('closed'));
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
+  process.on(sig, () => { finish('terminated'); process.exit(0); });
+}
 writeStatus('starting');
 check();
