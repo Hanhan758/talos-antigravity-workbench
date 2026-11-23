@@ -102,9 +102,16 @@ if (process.platform === 'darwin' && fs.existsSync('/Applications/Antigravity.ap
     assert.ok(fs.existsSync(path.join(foreignApp, 'Contents/sentinel.txt')), 'Foreign app sentinel must survive');
     assert.ok(fs.existsSync(path.join(foreignDir, 'sentinel.txt')), 'Foreign dir sentinel must survive');
 
-    // 3c. First install with XML special chars in --name + relative paths -> verify absolute plist & plutil -lint
+    // 3c. First install with XML special chars in --name + relative paths -> verify absolute plist, plutil -lint & shared parent protection
     const relApp = './Rel Test.app';
     const relRuntime = './rel-support/runtime';
+    const resolvedRelApp = path.join(tmpRoot, 'Rel Test.app');
+    const resolvedRelParent = path.join(tmpRoot, 'rel-support');
+    const resolvedRelRuntime = path.join(resolvedRelParent, 'runtime');
+    fs.mkdirSync(resolvedRelParent, { recursive: true });
+    fs.writeFileSync(path.join(resolvedRelParent, 'sibling-keep.txt'), 'do-not-delete');
+    fs.writeFileSync(path.join(resolvedRelParent, 'launcher.sha256'), 'USER_OWNED_LAUNCHER_HASH\n');
+
     execFileSync('bash', [
       installSh,
       '--dest', relApp,
@@ -112,37 +119,84 @@ if (process.platform === 'darwin' && fs.existsSync('/Applications/Antigravity.ap
       '--name', 'Antigravity & <Test>'
     ], { cwd: tmpRoot, stdio: 'pipe' });
 
-    const resolvedRelApp = path.join(tmpRoot, 'Rel Test.app');
-    const resolvedRelParent = path.join(tmpRoot, 'rel-support');
-    const resolvedRelRuntime = path.join(resolvedRelParent, 'runtime');
     execFileSync('/usr/bin/plutil', ['-lint', path.join(resolvedRelApp, 'Contents/Info.plist')], { stdio: 'pipe' });
     const relPlist = fs.readFileSync(path.join(resolvedRelApp, 'Contents/Info.plist'), 'utf8');
     assert.match(relPlist, /Antigravity &amp; &lt;Test&gt;/);
     assert.ok(relPlist.includes(`<string>${fs.realpathSync(resolvedRelRuntime)}</string>`), 'AGWRuntimeDir must be normalized absolute path');
+    assert.equal(
+      fs.readFileSync(path.join(resolvedRelParent, 'launcher.sha256'), 'utf8'),
+      'USER_OWNED_LAUNCHER_HASH\n',
+      'Install must not overwrite unrelated launcher.sha256 in shared parent directory'
+    );
+    assert.ok(fs.existsSync(path.join(resolvedRelRuntime, '.launcher.sha256')), 'Launcher hash must live inside managed runtime dir');
 
-    // Shared parent sibling protection on uninstall
-    fs.writeFileSync(path.join(resolvedRelParent, 'sibling-keep.txt'), 'do-not-delete');
+    // Shared parent sibling & same-name launcher.sha256 protection on uninstall
     execFileSync('bash', [uninstallSh, '--dest', resolvedRelApp, '--runtime', resolvedRelParent], { stdio: 'pipe' });
     assert.equal(fs.existsSync(resolvedRelRuntime), false, 'Managed runtime subdir must be removed');
     assert.ok(fs.existsSync(path.join(resolvedRelParent, 'sibling-keep.txt')), 'Sibling file in shared parent must be preserved');
+    assert.equal(
+      fs.readFileSync(path.join(resolvedRelParent, 'launcher.sha256'), 'utf8'),
+      'USER_OWNED_LAUNCHER_HASH\n',
+      'Uninstall must not delete unrelated launcher.sha256 in shared parent directory'
+    );
 
-    // 3d. Native install + CDHash stability + failed update rollback
+    // 3d. Native install + multi-update CDHash stability + pre-swap & mid-swap rollback + launch rolled-back old app
     execFileSync('bash', [installSh, '--dest', testApp, '--runtime', testRuntime, '--name', 'Antigravity Workbench Test'], { stdio: 'pipe' });
     execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', testApp], { stdio: 'pipe' });
     const cdHashBefore = readCdHash(testApp);
     const mtimeBefore = fs.statSync(path.join(testApp, 'Contents/MacOS/AntigravityWorkbench')).mtimeMs;
 
-    execFileSync('bash', [installSh, '--dest', testApp, '--runtime', testRuntime, '--name', 'Antigravity Workbench Test'], { stdio: 'pipe' });
-    assert.equal(fs.statSync(path.join(testApp, 'Contents/MacOS/AntigravityWorkbench')).mtimeMs, mtimeBefore);
-    assert.equal(readCdHash(testApp), cdHashBefore);
+    // Two consecutive runtime updates must both preserve .launcher.sha256 and keep CDHash/mtime unchanged
+    for (let i = 0; i < 2; i++) {
+      execFileSync('bash', [installSh, '--dest', testApp, '--runtime', testRuntime, '--name', 'Antigravity Workbench Test'], { stdio: 'pipe' });
+      assert.equal(fs.statSync(path.join(testApp, 'Contents/MacOS/AntigravityWorkbench')).mtimeMs, mtimeBefore);
+      assert.equal(readCdHash(testApp), cdHashBefore);
+    }
 
+    // Pre-swap failure (invalid signing identity during stage 2)
     const failSign = spawnSync('bash', [
       installSh, '--dest', testApp, '--runtime', testRuntime,
       '--name', 'Antigravity Workbench Test', '--rebuild-launcher', '--sign', 'NON_EXISTENT_SIGN_IDENTITY_99999'
     ], { encoding: 'utf8' });
     assert.notEqual(failSign.status, 0);
-    assert.ok(fs.existsSync(path.join(testRuntime, 'launch.cjs')), 'Old runtime must survive failed update');
-    assert.equal(readCdHash(testApp), cdHashBefore, 'Old launcher CDHash must survive failed update');
+    assert.ok(fs.existsSync(path.join(testRuntime, 'launch.cjs')), 'Old runtime must survive pre-swap failure');
+    assert.equal(readCdHash(testApp), cdHashBefore, 'Old launcher CDHash must survive pre-swap failure');
+
+    // Mid-swap failure (stage 3: runtime already swapped, then app swap fails because old app is locked via uchg)
+    fs.writeFileSync(path.join(testRuntime, '.v1-marker'), 'v1');
+    execFileSync('/usr/bin/chflags', ['uchg', testApp], { stdio: 'pipe' });
+    let failSwap;
+    try {
+      failSwap = spawnSync('bash', [
+        installSh, '--dest', testApp, '--runtime', testRuntime,
+        '--name', 'Antigravity Workbench Updated', '--rebuild-launcher'
+      ], { encoding: 'utf8' });
+    } finally {
+      execFileSync('/usr/bin/chflags', ['nouchg', testApp], { stdio: 'pipe' });
+    }
+    assert.notEqual(failSwap.status, 0, 'Mid-swap failure must return non-zero');
+    assert.ok(fs.existsSync(path.join(testRuntime, '.v1-marker')), 'Old runtime must be rolled back after mid-swap failure');
+    assert.equal(
+      execFileSync('/usr/bin/defaults', ['read', path.join(testApp, 'Contents/Info.plist'), 'CFBundleDisplayName'], { encoding: 'utf8' }).trim(),
+      'Antigravity Workbench Test',
+      'Old app DisplayName must remain intact after mid-swap failure'
+    );
+    execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', testApp], { stdio: 'pipe' });
+    assert.equal(readCdHash(testApp), cdHashBefore, 'Old app CDHash must remain intact after mid-swap failure');
+    assert.equal(
+      fs.readdirSync(testRuntimeBase).some(n => n.startsWith('.talos-agw-')),
+      false,
+      'No temporary stage or backup dirs should remain in runtime parent after rollback'
+    );
+
+    // Verify rolled-back old launcher can actually execute cleanly when Antigravity is running
+    let rolledBackLaunched = false;
+    const runningCheck = spawnSync('/usr/bin/lsappinfo', ['info', '-only', 'pid', 'com.google.antigravity'], { encoding: 'utf8' });
+    if (runningCheck.status === 0 && /"pid"\s*=\s*\d+/.test(runningCheck.stdout || '')) {
+      const launchOld = spawnSync(path.join(testApp, 'Contents/MacOS/AntigravityWorkbench'), [], { encoding: 'utf8', timeout: 5000 });
+      assert.equal(launchOld.status, 0, `Rolled-back old launcher failed to run: ${launchOld.stderr}`);
+      rolledBackLaunched = true;
+    }
 
     // 3e. --no-compile Shell fallback: verify syntax and signature-before-pgrep ordering
     execFileSync('bash', [installSh, '--no-compile', '--rebuild-launcher', '--dest', testApp, '--runtime', testRuntime], { stdio: 'pipe' });
@@ -155,7 +209,7 @@ if (process.platform === 'darwin' && fs.existsSync('/Applications/Antigravity.ap
     execFileSync('bash', [uninstallSh, '--dest', testApp, '--runtime', testRuntimeBase], { stdio: 'pipe' });
     assert.equal(fs.existsSync(testApp), false);
     assert.equal(fs.existsSync(testRuntimeBase), false);
-    console.log(`ALL_SMOKE_TESTS_PASSED (macOS CDHash verified: ${cdHashBefore.slice(0, 12)}...)`);
+    console.log(`ALL_SMOKE_TESTS_PASSED (macOS CDHash verified: ${cdHashBefore.slice(0, 12)}..., rolledBackOldAppLaunched: ${rolledBackLaunched})`);
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   }

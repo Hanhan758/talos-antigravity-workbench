@@ -220,7 +220,7 @@ LAUNCHER_HASH="$(
   } | shasum -a 256 | awk '{print $1}'
 )"
 
-HASH_FILE="$(dirname "$RUNTIME_DIR")/launcher.sha256"
+HASH_FILE="$RUNTIME_DIR/.launcher.sha256"
 NEED_BUILD_APP=1
 if [[ "$REBUILD_LAUNCHER" -eq 0 && -d "$DEST_APP" && -f "$HASH_FILE" ]]; then
   SAVED_HASH="$(cat "$HASH_FILE" 2>/dev/null || true)"
@@ -273,7 +273,7 @@ cleanup_on_exit() {
 }
 trap cleanup_on_exit EXIT
 
-# 1. 准备新运行时源码 + 归属清单（尚未触碰旧安装）
+# 1. 准备新运行时源码 + 归属清单 + 启动器哈希（全部位于受管目录内，尚未触碰旧安装或父目录）
 cp "$SRC_DIR"/* "$STAGE_RUNTIME/"
 cat > "$STAGE_RUNTIME/$MANIFEST_NAME" <<EOF
 {
@@ -282,6 +282,7 @@ cat > "$STAGE_RUNTIME/$MANIFEST_NAME" <<EOF
   "schema_version": 1
 }
 EOF
+printf '%s\n' "$LAUNCHER_HASH" > "$STAGE_RUNTIME/.launcher.sha256"
 
 # 2. 若需构建启动器，先在同卷暂存目录完成编译、XML 校验、签名与严格验签（失败直接中断，不破坏旧版）
 STAGE_APP=""
@@ -419,7 +420,6 @@ if [[ "$NEED_BUILD_APP" -eq 1 ]]; then
   fi
   mv "$STAGE_APP" "$DEST_APP"
   touch "$DEST_APP"
-  printf '%s\n' "$LAUNCHER_HASH" > "$HASH_FILE"
 fi
 
 echo "✅ 安装完成：$DEST_APP"

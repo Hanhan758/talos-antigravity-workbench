@@ -155,7 +155,6 @@ if [[ "$RUNTIME_DELETE_MODE" == "direct" && -d "$RUNTIME_ROOT" ]]; then
   echo "✅ 已移除运行时：$RUNTIME_ROOT"
 elif [[ "$RUNTIME_DELETE_MODE" == "subdir" && -d "$RUNTIME_ROOT/runtime" ]]; then
   rm -rf "$RUNTIME_ROOT/runtime"
-  rm -f "$RUNTIME_ROOT/launcher.sha256"
   rmdir "$RUNTIME_ROOT" 2>/dev/null || true
   echo "✅ 已移除运行时：$RUNTIME_ROOT/runtime"
 fi
