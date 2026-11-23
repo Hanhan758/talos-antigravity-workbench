@@ -38,6 +38,10 @@
 
   ![工作台主界面](docs/screenshots/workbench-sidebar.png)
 
+- **Claude 风格工作台主题**
+
+  ![Claude 风格工作台主题](docs/screenshots/workbench-claude-theme.png)
+
 ---
 
 ## 环境要求
