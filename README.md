@@ -20,6 +20,26 @@
 
 ---
 
+## 界面预览
+
+- **外观界面（原生 / Claude / Codex 主题 + `EN` / `中文` 实时切换）**
+
+  ![外观界面与主题语言切换](docs/screenshots/settings-appearance.png)
+
+- **常规设置（中文化设置面板）**
+
+  ![常规设置面板](docs/screenshots/settings-general.png)
+
+- **专注模式工作台（底部上下文与额度三环统计）**
+
+  ![专注模式工作台](docs/screenshots/workbench-focus.png)
+
+- **展开侧栏的工作台主界面**
+
+  ![工作台主界面](docs/screenshots/workbench-sidebar.png)
+
+---
+
 ## 环境要求
 
 - **操作系统**：macOS（已验证 Apple Silicon + Google Antigravity `2.34.0`）
@@ -31,7 +51,7 @@
 ## 快速安装
 
 ```bash
-git clone <你的仓库地址> talos-antigravity-workbench
+git clone https://github.com/Hanhan758/talos-antigravity-workbench.git
 cd talos-antigravity-workbench
 chmod +x scripts/install.sh scripts/uninstall.sh
 ./scripts/install.sh
