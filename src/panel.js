@@ -418,17 +418,20 @@
     } else if (groups.length===1) {
       quotaInfo.append(node('small','额度组 · '+group));
     }
-    const readout = quotaStatus==='refreshing' ? '正在后台同步…'
-      : staleSnapshot ? '额度缓存已过期'
-      : quotaStatus==='unavailable' ? (seenAt && groups.length ? '暂用 '+readTime(seenAt)+' 的缓存' : '额度暂不可用')
-      : seenAt && groups.length ? '同步于 '+readTime(seenAt) : '等待额度数据';
+    const isEn = window.__agLocalZhControl?.getLang?.() === 'en';
+    const readout = quotaStatus==='disabled' ? (isEn ? 'CLI quota disabled in Appearance' : 'CLI 额度查询已在外观设置中关闭')
+      : quotaStatus==='refreshing' ? (isEn ? 'Syncing CLI quota…' : '正在同步 CLI 账号额度…')
+      : staleSnapshot ? (isEn ? 'CLI quota cache expired' : 'CLI 额度缓存已过期')
+      : quotaStatus==='unavailable' ? (seenAt && groups.length ? (isEn ? 'CLI cache from '+readTime(seenAt) : '暂用 CLI 缓存（'+readTime(seenAt)+'）') : (isEn ? 'CLI quota unavailable' : 'CLI 额度暂不可用'))
+      : seenAt && groups.length ? (isEn ? 'CLI account · '+readTime(seenAt) : 'CLI 账号额度 · '+readTime(seenAt))
+      : (isEn ? 'Waiting for CLI quota' : '等待 CLI 账号额度');
     const stamp = node('small',readout);
-    stamp.title = readout;
+    stamp.title = isEn ? readout + ' (Source: agy /usage CLI account)' : readout + '（数据来自本机 agy /usage 登录账号）';
     stamp.setAttribute('aria-live','polite');
-    const syncQuota = styled('button','ag-sync','同步额度');
+    const syncQuota = styled('button','ag-sync',isEn ? 'Sync CLI' : '同步额度');
     syncQuota.type = 'button';
-    syncQuota.disabled = quotaStatus==='refreshing';
-    syncQuota.title = '后台刷新模型额度';
+    syncQuota.disabled = quotaStatus==='refreshing' || quotaStatus==='disabled';
+    syncQuota.title = isEn ? 'Refresh CLI account quota (agy /usage)' : '后台刷新 CLI 账号模型额度（agy /usage）';
     quotaInfo.append(stamp,syncQuota);
     details.append(quotaInfo);
     if (ready) {

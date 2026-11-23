@@ -100,7 +100,7 @@ receivePipe.on('data', chunk => {
       pending.delete(message.id);
       callback(message);
     } else if (message.method === 'Runtime.bindingCalled' && message.params?.name === '__agLocalAppearanceChanged' &&
-        (message.params.payload === 'selection' || message.params.payload === 'language')) {
+        (message.params.payload === 'selection' || message.params.payload === 'language' || message.params.payload === 'quota')) {
       const entry = themeSessions.get(message.sessionId);
       if (entry) syncAppearance(message.sessionId,entry.url).catch(()=>{});
     } else if (message.method === 'Target.detachedFromTarget') {
@@ -147,15 +147,20 @@ async function refreshPanel(session, targetUrl) {
   if (intent?.clear) { quotaReader.invalidate(); nextQuotaRetry = 0; }
   if (!info?.mounted) return { mounted: false };
   if (info.pageVisible) {
-    const now = Date.now();
-    const snapshot = quotaReader.snapshot();
-    const expiredWindow = snapshot.items.some(row => row.resetAt && row.resetAt <= now);
-    const needsUpdate = !snapshot.seenAt || now - snapshot.seenAt >= 120000 || expiredWindow;
-    if (intent?.requested || (needsUpdate && now >= nextQuotaRetry)) {
-      quotaReader.request(intent?.requested === 'force');
-      nextQuotaRetry = now + 60000;
+    if (appearancePref.getQuota() !== 'on') {
+      quotaReader.invalidate();
+      await evaluate(session,targetUrl,`window.__agQuotaSummary?.apply(${JSON.stringify({status:'disabled',items:[],seenAt:0,expiresAt:0,stale:false,source:'cli'})}); return true;`);
+    } else {
+      const now = Date.now();
+      const snapshot = quotaReader.snapshot();
+      const expiredWindow = snapshot.items.some(row => row.resetAt && row.resetAt <= now);
+      const needsUpdate = !snapshot.seenAt || now - snapshot.seenAt >= 120000 || expiredWindow;
+      if (intent?.requested || (needsUpdate && now >= nextQuotaRetry)) {
+        quotaReader.request(intent?.requested === 'force');
+        nextQuotaRetry = now + 60000;
+      }
+      await evaluate(session,targetUrl,`window.__agQuotaSummary?.apply(${JSON.stringify({...quotaReader.snapshot(),source:'cli'})}); return true;`);
     }
-    await evaluate(session,targetUrl,`window.__agQuotaSummary?.apply(${JSON.stringify(quotaReader.snapshot())}); return true;`);
   }
   const id = info.id || null;
   const latest = id ? readMetrics(id) : { state: 'empty' };
@@ -259,6 +264,7 @@ async function syncAppearance(session,url) {
   if (read==='mount') {
     const code=appearanceSource.replace('__AG_INITIAL_APPEARANCE__',()=>JSON.stringify(appearancePref.get()))
       .replace('__AG_INITIAL_LANG__',()=>JSON.stringify(appearancePref.getLang()))
+      .replace('__AG_INITIAL_QUOTA__',()=>JSON.stringify(appearancePref.getQuota()))
       .replace('__AG_ACCOUNT_CONTEXT__',()=>JSON.stringify(displayProfile.context()));
     return evaluate(session,url,`return (${code.trim().replace(/;$/,'')});`);
   }
@@ -279,8 +285,12 @@ async function syncAppearance(session,url) {
   const langChoice=read.pendingLang;
   const validLangChoice=langChoice && typeof langChoice.id==='string' && langChoice.id.length===36 && ['zh','en'].includes(langChoice.lang);
   const langOk=!validLangChoice || appearancePref.saveLang(langChoice.lang);
+  const quotaChoice=read.pendingQuota;
+  const validQuotaChoice=quotaChoice && typeof quotaChoice.id==='string' && quotaChoice.id.length===36 && ['on','off'].includes(quotaChoice.quota);
+  const quotaOk=!validQuotaChoice || appearancePref.saveQuota(quotaChoice.quota);
   const currentLang=appearancePref.getLang();
-  const args=[appearancePref.get(),validChoice ? choice.id : null,!ok,currentLang,validLangChoice ? langChoice.id : null,!langOk].map(v=>JSON.stringify(v)).join(',');
+  const currentQuota=appearancePref.getQuota();
+  const args=[appearancePref.get(),validChoice ? choice.id : null,!ok,currentLang,validLangChoice ? langChoice.id : null,!langOk,currentQuota,validQuotaChoice ? quotaChoice.id : null,!quotaOk].map(v=>JSON.stringify(v)).join(',');
   return evaluate(session,url,`window.__agLocalZhControl?.setLang(${JSON.stringify(currentLang)});const theme=window.__agLocalAppearance;if(!theme)return null;theme.reconcile(${args});return theme.snapshot();`);
 }
 

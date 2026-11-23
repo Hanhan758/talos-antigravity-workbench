@@ -2842,6 +2842,7 @@
 
     applyLangFn = (nextLang) => {
       const target = nextLang === 'en' ? 'en' : 'zh';
+      if (target === activeLang) return activeLang;
       if (target === 'en') {
         activeLang = 'en';
         observer.disconnect();

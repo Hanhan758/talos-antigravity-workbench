@@ -1,4 +1,4 @@
-((css, initialMode, initialLang, initialAccount) => {
+((css, initialMode, initialLang, initialQuota, initialAccount) => {
   'use strict';
   if (window !== window.top || !document.body || location.protocol !== 'https:' || location.hostname !== '127.0.0.1' ||
       !location.port || typeof window.electronNative?.getZoomLevel !== 'function' ||
@@ -10,13 +10,15 @@
   const namesEn = {google:'Google',claude:'Claude',codex:'Codex'};
   const valid = mode => Object.hasOwn(names,mode);
   const validLang = lang => lang==='zh' || lang==='en';
+  const validQuota = v => v==='on' || v==='off';
   const style = document.createElement('style');
   style.id = 'ag-local-appearance-style';
   style.textContent = css;
   document.head.append(style);
   let current = valid(initialMode) ? initialMode : 'google';
   let currentLang = validLang(initialLang) ? initialLang : (window.__agLocalZhControl?.getLang?.() || 'zh');
-  let pending = null, saveError = false, pendingLang = null, langSaveError = false, settingAnchor = null;
+  let currentQuota = validQuota(initialQuota) ? initialQuota : 'on';
+  let pending = null, saveError = false, pendingLang = null, langSaveError = false, pendingQuota = null, quotaSaveError = false, settingAnchor = null;
   const scheme = matchMedia('(prefers-color-scheme: dark)');
   const shown = el => el?.isConnected && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
 
@@ -59,6 +61,14 @@
     try { window.__agLocalZhControl?.setLang(lang); } catch {}
     renderSettingsRows();
     try { window.__agLocalAppearanceChanged?.('language'); } catch {}
+  }
+  function chooseQuota(next) {
+    if(!validQuota(next) || next===currentQuota && !quotaSaveError) return;
+    currentQuota=next;
+    pendingQuota={id:crypto.randomUUID(),quota:next};
+    quotaSaveError=false;
+    renderSettingsRows();
+    try { window.__agLocalAppearanceChanged?.('quota'); } catch {}
   }
   const account=(__AG_ACCOUNT_FOOTER__)({choose,getMode:()=>current,getSettings:()=>layout.settingsTarget(settingAnchor),names,initialAccount});
   const side=account.element,cardSlot=document.createElement('span');
@@ -104,21 +114,47 @@
   }
   langRow.append(langLabel,langGroup);
 
+  const quotaRow=document.createElement('div');
+  quotaRow.id='aw-settings-quota-row';quotaRow.className='aw-settings-row';quotaRow.dataset.awOwned='';
+  const quotaLabel=document.createElement('span');quotaLabel.className='aw-settings-label';
+  const quotaGroup=document.createElement('div');quotaGroup.className='aw-settings-pill';quotaGroup.setAttribute('role','radiogroup');
+  const quotaButtons=new Map();
+  for(const code of ['on','off']) {
+    const btn=document.createElement('button');btn.type='button';btn.className='aw-settings-pill-btn';
+    btn.dataset.awQuota=code;btn.setAttribute('role','radio');
+    btn.addEventListener('click',()=>chooseQuota(code));
+    quotaButtons.set(code,btn);quotaGroup.append(btn);
+  }
+  quotaRow.append(quotaLabel,quotaGroup);
+
+  const setText=(el,val)=>{if(el.textContent!==val)el.textContent=val;};
+  const setAttr=(el,k,val)=>{if(el.getAttribute(k)!==val)el.setAttribute(k,val);};
+  const setTitle=(el,val)=>{if(el.title!==val)el.title=val;};
+
   function renderSettingsRows() {
     const zh=currentLang==='zh';
-    themeLabel.textContent=zh?'工作台主题':'Workspace Theme';
-    themeGroup.setAttribute('aria-label',themeLabel.textContent);
+    const tLabel=zh?'工作台主题':'Workspace Theme';
+    setText(themeLabel,tLabel);
+    setAttr(themeGroup,'aria-label',tLabel);
     for(const [mode,{btn,txt}] of themeButtons) {
-      const active=mode===current;
-      btn.setAttribute('aria-checked',String(active));
-      btn.title=zh?names[mode]:namesEn[mode];
-      txt.textContent=mode==='google'?(zh?'原生':'Google'):(mode==='claude'?'Claude':'Codex');
+      setAttr(btn,'aria-checked',String(mode===current));
+      setTitle(btn,zh?names[mode]:namesEn[mode]);
+      setText(txt,mode==='google'?(zh?'原生':'Google'):(mode==='claude'?'Claude':'Codex'));
     }
-    langLabel.textContent=zh?'界面语言':'Interface Language';
-    langGroup.setAttribute('aria-label',langLabel.textContent);
+    const lLabel=zh?'界面语言':'Interface Language';
+    setText(langLabel,lLabel);
+    setAttr(langGroup,'aria-label',lLabel);
     for(const [code,btn] of langButtons) {
-      btn.setAttribute('aria-checked',String(code===currentLang));
-      btn.title=code==='zh'?(zh?'切换为简体中文':'Switch to Simplified Chinese'):(zh?'切换为英文原版':'Switch to English');
+      setAttr(btn,'aria-checked',String(code===currentLang));
+      setTitle(btn,code==='zh'?(zh?'切换为简体中文':'Switch to Simplified Chinese'):(zh?'切换为英文原版':'Switch to English'));
+    }
+    const qLabel=zh?'CLI 额度查询':'CLI Quota Polling';
+    setText(quotaLabel,qLabel);
+    setAttr(quotaGroup,'aria-label',qLabel);
+    for(const [code,btn] of quotaButtons) {
+      setAttr(btn,'aria-checked',String(code===currentQuota));
+      setText(btn,code==='on'?(zh?'开启':'On'):(zh?'关闭':'Off'));
+      setTitle(btn,code==='on'?(zh?'通过本机 agy /usage 同步 CLI 账号额度':'Sync CLI account quota via agy /usage'):(zh?'关闭后台 CLI 额度查询':'Disable background CLI quota polling'));
     }
   }
 
@@ -152,7 +188,7 @@
 
   function mountSettingsRows() {
     renderSettingsRows();
-    if(themeRow.isConnected && langRow.isConnected) return;
+    if(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected) return;
     if(!/settings/i.test(location.pathname+location.hash) &&
        !document.querySelector('dialog[open],[role="dialog"],[aria-modal="true"],[data-testid*="settings"],[class~="group/nav-item"]')) return;
     const target=findAppearanceCard();
@@ -161,14 +197,17 @@
     const cs=getComputedStyle(nativeThemeRow);
     const padL=cs.paddingLeft, padR=cs.paddingRight;
     if(padL && padL!=='0px') {
-      themeRow.style.paddingLeft=langRow.style.paddingLeft=padL;
-      themeRow.style.paddingRight=langRow.style.paddingRight=padR||padL;
+      themeRow.style.paddingLeft=langRow.style.paddingLeft=quotaRow.style.paddingLeft=padL;
+      themeRow.style.paddingRight=langRow.style.paddingRight=quotaRow.style.paddingRight=padR||padL;
     }
     if(themeRow.parentElement!==card || themeRow.previousElementSibling!==nativeThemeRow) {
       nativeThemeRow.insertAdjacentElement('afterend',themeRow);
     }
     if(langRow.parentElement!==card || langRow.previousElementSibling!==lastRow) {
       lastRow.insertAdjacentElement('afterend',langRow);
+    }
+    if(quotaRow.parentElement!==card || quotaRow.previousElementSibling!==langRow) {
+      langRow.insertAdjacentElement('afterend',quotaRow);
     }
   }
 
@@ -228,7 +267,7 @@
     if(!style.isConnected) document.head.append(style);
   }
   layout.setRefresh(mount);
-  function reconcile(mode,ack=null,failed=false,lang=null,langAck=null,langFailed=false) {
+  function reconcile(mode,ack=null,failed=false,lang=null,langAck=null,langFailed=false,quota=null,quotaAck=null,quotaFailed=false) {
     if(ack && pending?.id===ack) {
       if(failed) saveError=true;
       else {pending=null;saveError=false;}
@@ -242,6 +281,13 @@
       currentLang=lang;
       try { window.__agLocalZhControl?.setLang(lang); } catch {}
     }
+    if(quotaAck && pendingQuota?.id===quotaAck) {
+      if(quotaFailed) quotaSaveError=true;
+      else {pendingQuota=null;quotaSaveError=false;}
+    }
+    if(!pendingQuota && validQuota(quota) && quota!==currentQuota) {
+      currentQuota=quota;
+    }
     paint(); mount();
   }
   function snapshot() {
@@ -250,7 +296,7 @@
     const composer=document.querySelector('[id="antigravity.agentSidePanelInputBox"]');
     const selector=composer?.querySelector('[data-testid="model-selector-trigger"]');
     const paragraph=[...document.querySelectorAll('[data-markdown-root] p,.prose p,.markdown p')].find(shown);
-    return {mode:current,lang:currentLang,tone:tone(), pending, pendingLang, structure:layout.status(), settingsRowHidden:!!settingAnchor?.isConnected && !shown(settingAnchor), settingsInjected:!!(themeRow.isConnected && langRow.isConnected), account:account.info(), sidebar:!!shown(side), cardEntry:!!cardSlot.isConnected,
+    return {mode:current,lang:currentLang,quota:currentQuota,tone:tone(), pending, pendingLang, pendingQuota, structure:layout.status(), settingsRowHidden:!!settingAnchor?.isConnected && !shown(settingAnchor), settingsInjected:!!(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected), account:account.info(), sidebar:!!shown(side), cardEntry:!!cardSlot.isConnected,
       pageColor:styles.getPropertyValue('--background').trim().slice(0,64),
       sidebarColor:styles.getPropertyValue('--sidebar').trim().slice(0,64),
       composerColor:composer?getComputedStyle(composer).backgroundColor:null,
@@ -261,8 +307,10 @@
       accent:card?getComputedStyle(card).getPropertyValue('--ag-primary').trim().slice(0,64):null};
   }
   let settingsMountTimer=null;
-  const settingsObserver=new MutationObserver(()=>{
-    if(settingsMountTimer) return;
+  const settingsObserver=new MutationObserver(mutations=>{
+    if(settingsMountTimer || (themeRow.isConnected && langRow.isConnected && quotaRow.isConnected)) return;
+    const external=mutations.some(m=>!(m.target instanceof Element && m.target.closest?.('[data-aw-owned]')));
+    if(!external) return;
     settingsMountTimer=setTimeout(()=>{settingsMountTimer=null;mountSettingsRows();},140);
   });
   settingsObserver.observe(document.body,{childList:true,subtree:true});
@@ -271,4 +319,4 @@
   scheme.addEventListener('change',paint);
   window.__agLocalAppearance=Object.freeze({reconcile,snapshot,takeProfile:account.take,acceptProfile:account.cache});
   paint(); mount(); return snapshot();
-})(__AG_APPEARANCE_CSS__,__AG_INITIAL_APPEARANCE__,__AG_INITIAL_LANG__,__AG_ACCOUNT_CONTEXT__)
+})(__AG_APPEARANCE_CSS__,__AG_INITIAL_APPEARANCE__,__AG_INITIAL_LANG__,__AG_INITIAL_QUOTA__,__AG_ACCOUNT_CONTEXT__)

@@ -52,7 +52,7 @@
 
 - **操作系统**：macOS（已验证 Apple Silicon + Google Antigravity `2.34.0`）
 - **原版应用**：已安装官方 `/Applications/Antigravity.app`
-- **运行时**：Node.js `v22.5+`（需内置 `node:sqlite` 支持；安装器如检测到 `clang` 会编译原生轻量启动器，未安装 Xcode CLT 时自动降级为轻量 Shell 启动入口）
+- **运行时**：Node.js `v22.13+`（需要免实验开关默认启用内置 `node:sqlite`；安装器会将校验通过的 `node` 绝对路径写入启动器 `Info.plist`，避免 nvm/fnm 等多版本环境错位；如检测到 `clang` 会编译原生轻量启动器，未安装 Xcode CLT 时自动降级为轻量 Shell 启动入口）
 
 ---
 
@@ -91,11 +91,12 @@ chmod +x scripts/install.sh scripts/uninstall.sh
 ## 工作原理与安全边界
 
 - **无侵入**：通过 Electron 匿名调试管道（`--remote-debugging-pipe`）仅向本机 `https://127.0.0.1:<port>` 的 Antigravity 主窗口注入前端样式与脚本，不开启对外端口，不修改原版 `app.asar`。
+- **安全安装与回滚**：安装器与卸载器会校验归属清单（`.talos-agw-managed.json`），拒绝覆盖或删除原版应用、系统目录及非本项目托管目录；更新时先在同卷暂存并完成严格签名校验，失败自动回滚保留旧版。
 - **防 macOS「文稿」反复授权弹窗**：
-  - **动静分离（固定启动器 CDHash）**：运行时 JS/CSS 独立部署在 `~/Library/Application Support/talos-antigravity-workbench/runtime/`，启动器 `.app` 仅保留轻量外壳与原版图标；后续运行 `install.sh` 更新主题或汉化时不会重签 `.app`，避免 macOS TCC 因签名哈希变化而反复弹窗。如需彻底绑定证书身份，也支持 `--sign "<本机证书名>"`。
-  - **受限沙盒额度查询**：后台额度查询在 `sandbox-exec`（`quota-only.sb`）中运行，明确禁止读取 `Documents`、`Desktop`、`Downloads` 且禁止拉起外部 MCP 进程，并在退出时按进程组回收。
-- **原版签名校验**：启动器拉起前会使用 `codesign --verify --strict` 校验原版应用包签名。
-- **零数据上传**：所有汉化、主题与统计均在本地完成，不上传对话内容、账号信息或令牌。
+  - **动静分离（固定启动器 CDHash）**：运行时 JS/CSS 独立部署在 `~/Library/Application Support/talos-antigravity-workbench/runtime/`，启动器 `.app` 仅保留轻量外壳与原版图标；后续运行 `install.sh` 更新主题或汉化时不会重签 `.app`，避免 macOS TCC 因签名哈希变化而反复弹窗。如需进一步绑定证书身份，也支持 `--sign "<本机证书名>"`。
+  - **受限额度查询与开关**：后台额度查询调用本机官方 `agy /usage`（并在面板中明确标注为「CLI 账号额度」，若桌面与 CLI 登录不同账号可随时在「系统设置 → 外观界面 → 额度查询」关闭后台查询）。查询进程运行在 `sandbox-exec` 黑名单沙盒（`quota-only.sb`）中，显式拒绝读取 `Documents`、`Desktop`、`Downloads` 及拉起外部进程，并在退出时按进程组回收。
+- **原版官方签名校验**：原生启动器与 Shell 降级入口统一使用 `codesign --verify --strict` 校验 Google LLC (`EQHXZ8M8AV`) 与 `com.google.antigravity` 签名身份，未通过直接中止启动。
+- **网络与隐私边界**：本项目不向任何第三方服务器上传对话内容、账号或令牌；但在开启额度查询时会调用官方 `agy` CLI 联网获取配额，账号底栏在已登录时会按官方原样加载 `googleusercontent.com` 远程头像。
 - **随时回退**：若官方大改版导致某项样式失效，直接打开 `/Applications/Antigravity.app` 即可无损回到原版。
 
 ---

@@ -177,25 +177,29 @@
     const key=[mode,dock.isConnected,...entries,hasProjects,hasStats].join('-');
     if(key===topKey)return;topKey=key;
     rail.replaceChildren();commands.replaceChildren();
+    const isEn = () => window.__agLocalZhControl?.getLang?.() === 'en';
     const add=(parent,k,label,fn,small)=>parent.append(action(k,label,fn,small));
     if(mode==='codex'){
-      if(entries.includes('new')) add(rail,'chat','对话首页',()=>navTo('new'),true);
-      if(hasProjects)add(rail,'folder','定位项目',openProjects,true);
-      if(entries.includes('automation'))add(rail,'clock','自动化任务',()=>navTo('automation'),true);
-      if(entries.includes('custom'))add(rail,'grid','技能与自定义',()=>navTo('custom'),true);
+      if(entries.includes('new')) add(rail,'chat',isEn()?'Home':'对话首页',()=>navTo('new'),true);
+      if(hasProjects)add(rail,'folder',isEn()?'Projects':'定位项目',openProjects,true);
+      if(entries.includes('automation'))add(rail,'clock',isEn()?'Automations':'自动化任务',()=>navTo('automation'),true);
+      if(entries.includes('custom'))add(rail,'grid',isEn()?'Customizations':'技能与自定义',()=>navTo('custom'),true);
       const foot=el('div','aw-rail-foot');
-      if(hasStats)add(foot,'use','打开用量统计',stats,true);
+      if(hasStats)add(foot,'use',isEn()?'Open Usage':'打开用量统计',stats,true);
 
       rail.append(foot);
       for(const n of rail.querySelectorAll('button')) n.dataset.awDest=n.getAttribute('aria-label');
-      if(rawButtons.new)add(commands,'add','新建对话',()=>navTo('new'));
+      if(rawButtons.new)add(commands,'add',isEn()?'New Chat':'新建对话',()=>navTo('new'));
     } else {
-      if(rawButtons.new)add(commands,'add','新建对话',()=>navTo('new'));
-      const searchBtn=action('search','搜索',search);searchBtn.dataset.awSearch='1';commands.append(searchBtn);
-      if(hasProjects)add(commands,'folder','项目',()=>focusEntry(firstProject()));
-      if(rawButtons.custom)add(commands,'grid','技能与自定义',()=>navTo('custom'));
-      if(rawButtons.automation)add(commands,'clock','自动化任务',()=>navTo('automation'));
+      if(rawButtons.new)add(commands,'add',isEn()?'New Chat':'新建对话',()=>navTo('new'));
+      const searchBtn=action('search',isEn()?'Search':'搜索',search);searchBtn.dataset.awSearch='1';commands.append(searchBtn);
+      if(hasProjects)add(commands,'folder',isEn()?'Projects':'项目',()=>focusEntry(firstProject()));
+      if(rawButtons.custom)add(commands,'grid',isEn()?'Customizations':'技能与自定义',()=>navTo('custom'));
+      if(rawButtons.automation)add(commands,'clock',isEn()?'Automations':'自动化任务',()=>navTo('automation'));
     }
+  }
+  function rowId(r){
+    return (r?.dataset?.cascadeId || r?.querySelector?.('a[href*="/c/"]')?.getAttribute('href')?.match(/\/c\/([0-9a-f-]{36})/i)?.[1] || '').toLowerCase();
   }
   function rowTitle(r){
     const n=r.querySelector('a[href*="/c/"],span.truncate,[class~="truncate"]');
@@ -212,14 +216,19 @@
     const heading=[...host.querySelectorAll('h2,h3,h4,button,[role="heading"],span')].find(n=>!n.closest(own+','+rows)&&n.childElementCount===0&&['Pinned','Pinned Conversations','置顶','置顶对话'].includes(txt(n))&&vis(n));
     if(heading){fav.hidden=true;return;}
     const list=pinned();
-    const names=list.map(rowTitle), k=JSON.stringify(names);
-    if(k!==favKey){favKey=k;fav.replaceChildren(el('h4','','置顶'));
-      names.forEach((name,index)=>{if(name)fav.append(action('pin',name,()=>{
-        const r=pinned().find(e=>rowTitle(e)===name);
+    const isEn = window.__agLocalZhControl?.getLang?.() === 'en';
+    const items=list.map((r,index)=>({id:rowId(r),title:rowTitle(r),index})).filter(it=>it.title);
+    const k=JSON.stringify([isEn?'en':'zh',items]);
+    if(k!==favKey){favKey=k;fav.replaceChildren(el('h4','',isEn?'Pinned':'置顶'));
+      items.forEach(item=>{fav.append(action('pin',item.title,()=>{
+        const currentPinned=pinned();
+        const r=(item.id && currentPinned.find(e=>rowId(e)===item.id)) ||
+          currentPinned.find((e,idx)=>idx===item.index && rowTitle(e)===item.title) ||
+          currentPinned.find(e=>rowTitle(e)===item.title);
         (r?.querySelector('a[href*="/c/"],[role="link"],button')||r)?.click();
       }));});
     }
-    fav.hidden=!list.length;
+    fav.hidden=!items.length;
   }
   function controlLabel(n) {return (txt(n)||n?.getAttribute('aria-label')||n?.title||'').trim().slice(0,85);}
   // 参考图的主体为 12 × 8 格。直接在界面中绘制，透出页面背景，避免位图缩放变糊。

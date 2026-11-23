@@ -1,12 +1,17 @@
 #import <Cocoa/Cocoa.h>
 
-static NSString *resolveNodePath(void) {
+static NSString *resolveNodePath(NSBundle *bundle) {
   NSFileManager *fm = [NSFileManager defaultManager];
-  NSArray<NSString *> *candidates = @[
+  NSString *plistNode = [bundle objectForInfoDictionaryKey:@"AGWNodePath"];
+  NSMutableArray<NSString *> *candidates = [NSMutableArray array];
+  if ([plistNode isKindOfClass:[NSString class]] && plistNode.length > 0) {
+    [candidates addObject:plistNode];
+  }
+  [candidates addObjectsFromArray:@[
     @"/opt/homebrew/bin/node",
     @"/usr/local/bin/node",
     @"/usr/bin/node"
-  ];
+  ]];
   for (NSString *path in candidates) {
     if ([fm isExecutableFileAtPath:path]) return path;
   }
@@ -28,10 +33,23 @@ static NSString *resolveNodePath(void) {
   return nil;
 }
 
-static BOOL verifyBundleSignature(NSString *appPath) {
+static BOOL verifyGoogleAntigravitySignature(NSString *appPath) {
+  NSString *requirement =
+      @"-R=anchor apple generic and identifier \"com.google.antigravity\" and certificate leaf[subject.OU] = \"EQHXZ8M8AV\"";
   NSTask *task = [[NSTask alloc] init];
   task.executableURL = [NSURL fileURLWithPath:@"/usr/bin/codesign"];
-  task.arguments = @[@"--verify", @"--strict", appPath];
+  task.arguments = @[@"--verify", @"--strict", requirement, appPath];
+  task.standardOutput = [NSPipe pipe];
+  task.standardError = [NSPipe pipe];
+  if (![task launchAndReturnError:nil]) return NO;
+  [task waitUntilExit];
+  return task.terminationStatus == 0;
+}
+
+static BOOL verifyNodeSqlite(NSString *nodePath) {
+  NSTask *task = [[NSTask alloc] init];
+  task.executableURL = [NSURL fileURLWithPath:nodePath];
+  task.arguments = @[@"-e", @"require('node:sqlite')"];
   task.standardOutput = [NSPipe pipe];
   task.standardError = [NSPipe pipe];
   if (![task launchAndReturnError:nil]) return NO;
@@ -70,16 +88,16 @@ int main(int argc, const char *argv[]) {
       return 0;
     }
 
-    if (!verifyBundleSignature(appPath)) {
-      showAlert(@"原版 Antigravity 签名校验未通过",
-                @"检测到原版应用包签名异常。为保障安全，启动器已停止启动，请重新安装官方 Antigravity。");
+    if (!verifyGoogleAntigravitySignature(appPath)) {
+      showAlert(@"原版 Antigravity 官方签名校验未通过",
+                @"目标应用未通过 Google LLC (EQHXZ8M8AV) / com.google.antigravity 严格签名校验。为保障安全，启动器已停止启动。");
       return 1;
     }
 
-    NSString *nodePath = resolveNodePath();
-    if (!nodePath) {
-      showAlert(@"未找到 Node.js",
-                @"请先安装 Node.js（需要 v22.5 及以上以支持内置 node:sqlite），例如执行 brew install node。");
+    NSString *nodePath = resolveNodePath(mainBundle);
+    if (!nodePath || !verifyNodeSqlite(nodePath)) {
+      showAlert(@"Node.js 运行时不可用",
+                @"未找到支持内置 node:sqlite 的 Node.js（需要 v22.13 及以上），请升级 Node.js 后重新运行 install.sh。");
       return 1;
     }
 
@@ -91,7 +109,7 @@ int main(int argc, const char *argv[]) {
     }
     NSString *scriptPath = [runtimeDir stringByAppendingPathComponent:@"launch.cjs"];
     if (![fm fileExistsAtPath:scriptPath]) {
-      scriptPath = [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"launch.cjs"];
+      scriptPath = [[mainBundle resourcePath] stringByAppendingPathComponent:@"launch.cjs"];
     }
     if (![fm fileExistsAtPath:scriptPath]) {
       showAlert(@"启动器文件不完整", @"缺少运行时 launch.cjs，请重新运行 install.sh 安装。");
