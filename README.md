@@ -42,6 +42,10 @@
 
   ![Claude 风格工作台主题](docs/screenshots/workbench-claude-theme.png)
 
+- **Codex 风格工作台主题与用量/额度统计浮窗**
+
+  ![Codex 风格工作台主题与用量额度统计浮窗](docs/screenshots/workbench-codex-quota.png)
+
 ---
 
 ## 环境要求
