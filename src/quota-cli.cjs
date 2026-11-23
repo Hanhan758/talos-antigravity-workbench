@@ -106,7 +106,7 @@ function runQuotaCommand(cli, options, signal) {
 }
 
 async function fetchQuota(signal) {
-  const cli = resolveCli();
+  const cli = fs.realpathSync(resolveCli());
   const options = {
     cwd:'/private/var/empty',
     env:{HOME:os.homedir(), PATH:'/usr/bin:/bin:/usr/sbin:/sbin', TMPDIR:os.tmpdir(), LANG:'en_US.UTF-8'}

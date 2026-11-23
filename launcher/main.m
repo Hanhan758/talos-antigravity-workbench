@@ -1,6 +1,18 @@
 #import <Cocoa/Cocoa.h>
 
-static NSString *resolveNodePath(NSBundle *bundle) {
+static BOOL verifyNodeSqlite(NSString *nodePath) {
+  if (nodePath.length == 0) return NO;
+  NSTask *task = [[NSTask alloc] init];
+  task.executableURL = [NSURL fileURLWithPath:nodePath];
+  task.arguments = @[@"-e", @"require('node:sqlite')"];
+  task.standardOutput = [NSPipe pipe];
+  task.standardError = [NSPipe pipe];
+  if (![task launchAndReturnError:nil]) return NO;
+  [task waitUntilExit];
+  return task.terminationStatus == 0;
+}
+
+static NSString *resolveCompatibleNodePath(NSBundle *bundle) {
   NSFileManager *fm = [NSFileManager defaultManager];
   NSString *plistNode = [bundle objectForInfoDictionaryKey:@"AGWNodePath"];
   NSMutableArray<NSString *> *candidates = [NSMutableArray array];
@@ -12,9 +24,7 @@ static NSString *resolveNodePath(NSBundle *bundle) {
     @"/usr/local/bin/node",
     @"/usr/bin/node"
   ]];
-  for (NSString *path in candidates) {
-    if ([fm isExecutableFileAtPath:path]) return path;
-  }
+
   NSTask *whichTask = [[NSTask alloc] init];
   whichTask.executableURL = [NSURL fileURLWithPath:@"/bin/zsh"];
   whichTask.arguments = @[@"-lc", @"command -v node"];
@@ -27,7 +37,15 @@ static NSString *resolveNodePath(NSBundle *bundle) {
       NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
       NSString *found = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]
           stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-      if (found.length > 0 && [fm isExecutableFileAtPath:found]) return found;
+      if (found.length > 0 && ![candidates containsObject:found]) {
+        [candidates addObject:found];
+      }
+    }
+  }
+
+  for (NSString *path in candidates) {
+    if ([fm isExecutableFileAtPath:path] && verifyNodeSqlite(path)) {
+      return path;
     }
   }
   return nil;
@@ -39,17 +57,6 @@ static BOOL verifyGoogleAntigravitySignature(NSString *appPath) {
   NSTask *task = [[NSTask alloc] init];
   task.executableURL = [NSURL fileURLWithPath:@"/usr/bin/codesign"];
   task.arguments = @[@"--verify", @"--strict", requirement, appPath];
-  task.standardOutput = [NSPipe pipe];
-  task.standardError = [NSPipe pipe];
-  if (![task launchAndReturnError:nil]) return NO;
-  [task waitUntilExit];
-  return task.terminationStatus == 0;
-}
-
-static BOOL verifyNodeSqlite(NSString *nodePath) {
-  NSTask *task = [[NSTask alloc] init];
-  task.executableURL = [NSURL fileURLWithPath:nodePath];
-  task.arguments = @[@"-e", @"require('node:sqlite')"];
   task.standardOutput = [NSPipe pipe];
   task.standardError = [NSPipe pipe];
   if (![task launchAndReturnError:nil]) return NO;
@@ -71,13 +78,21 @@ int main(int argc, const char *argv[]) {
   @autoreleasepool {
     NSProcessInfo *proc = [NSProcessInfo processInfo];
     NSBundle *mainBundle = [NSBundle mainBundle];
+    NSString *envApp = proc.environment[@"ANTIGRAVITY_APP_PATH"];
     NSString *plistApp = [mainBundle objectForInfoDictionaryKey:@"AGWAppPath"];
-    NSString *appPath = proc.environment[@"ANTIGRAVITY_APP_PATH"] ?: (plistApp.length > 0 ? plistApp : @"/Applications/Antigravity.app");
+    NSString *appPath = (envApp.length > 0) ? envApp
+        : ([plistApp isKindOfClass:[NSString class]] && plistApp.length > 0 ? plistApp : @"/Applications/Antigravity.app");
     NSFileManager *fm = [NSFileManager defaultManager];
 
     if (![fm fileExistsAtPath:appPath]) {
       showAlert(@"未找到原版 Antigravity",
                 [NSString stringWithFormat:@"请先安装 Google Antigravity（未找到：%@）。", appPath]);
+      return 1;
+    }
+
+    if (!verifyGoogleAntigravitySignature(appPath)) {
+      showAlert(@"原版 Antigravity 官方签名校验未通过",
+                @"目标应用未通过 Google LLC (EQHXZ8M8AV) / com.google.antigravity 严格签名校验。为保障安全，启动器已停止启动。");
       return 1;
     }
 
@@ -88,14 +103,8 @@ int main(int argc, const char *argv[]) {
       return 0;
     }
 
-    if (!verifyGoogleAntigravitySignature(appPath)) {
-      showAlert(@"原版 Antigravity 官方签名校验未通过",
-                @"目标应用未通过 Google LLC (EQHXZ8M8AV) / com.google.antigravity 严格签名校验。为保障安全，启动器已停止启动。");
-      return 1;
-    }
-
-    NSString *nodePath = resolveNodePath(mainBundle);
-    if (!nodePath || !verifyNodeSqlite(nodePath)) {
+    NSString *nodePath = resolveCompatibleNodePath(mainBundle);
+    if (!nodePath) {
       showAlert(@"Node.js 运行时不可用",
                 @"未找到支持内置 node:sqlite 的 Node.js（需要 v22.13 及以上），请升级 Node.js 后重新运行 install.sh。");
       return 1;
@@ -104,8 +113,9 @@ int main(int argc, const char *argv[]) {
     NSString *plistRuntime = [mainBundle objectForInfoDictionaryKey:@"AGWRuntimeDir"];
     NSString *runtimeDir = proc.environment[@"TALOS_AGW_RUNTIME"];
     if (runtimeDir.length == 0) {
-      runtimeDir = plistRuntime.length > 0 ? plistRuntime : [NSHomeDirectory() stringByAppendingPathComponent:
-          @"Library/Application Support/talos-antigravity-workbench/runtime"];
+      runtimeDir = ([plistRuntime isKindOfClass:[NSString class]] && plistRuntime.length > 0)
+          ? plistRuntime
+          : [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/talos-antigravity-workbench/runtime"];
     }
     NSString *scriptPath = [runtimeDir stringByAppendingPathComponent:@"launch.cjs"];
     if (![fm fileExistsAtPath:scriptPath]) {

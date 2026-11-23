@@ -79,7 +79,7 @@
   // UI 通过 React 受控 input 保存。读回采用独立侧栏链接标签，避开行内编辑器的乐观值。
   async function rename(id, expected, title) {
     if (!uuid.test(id || '') || typeof expected !== 'string' || !expected.trim() || typeof title !== 'string' ||
-        title.length > 70 || !/^(功能|设计|修复|优化|发布|探索|文档|研究)｜[^\r\n|｜]{1,55} \| \d{4}$/.test(title)) return {status:'unavailable'};
+        Array.from(title).length > 70 || !/^(功能|设计|修复|优化|发布|探索|文档|研究)｜[^\r\n|｜]{1,55} \| \d{4}$/u.test(title)) return {status:'unavailable'};
     if (busy || manual.has(id)) return {status:'cancelled'};
     const target = rowTarget(id);
     if (!target || !document.hasFocus() || document.querySelector(inlineSel+','+modalInput)) return {status:'unavailable'};

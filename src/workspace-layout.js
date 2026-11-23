@@ -172,20 +172,21 @@
   function navTo(key){direct(key);}
   function stats(){document.getElementById('ag-local-context-trigger')?.click();}
   function drawNav() {
+    const isEn = () => window.__agLocalZhControl?.getLang?.() === 'en';
+    const langTag = isEn() ? 'en' : 'zh';
     const entries=['new','automation','custom'].filter(k=>rawButtons[k] || (dock.isConnected && knownKeys.has(k)));
     const hasProjects=!!firstProject() || (dock.isConnected && !!nativeToggle()),hasStats=!!document.getElementById('ag-local-context-trigger');
-    const key=[mode,dock.isConnected,...entries,hasProjects,hasStats].join('-');
+    const key=[mode,langTag,dock.isConnected,...entries,hasProjects,hasStats].join('-');
     if(key===topKey)return;topKey=key;
     rail.replaceChildren();commands.replaceChildren();
-    const isEn = () => window.__agLocalZhControl?.getLang?.() === 'en';
-    const add=(parent,k,label,fn,small)=>parent.append(action(k,label,fn,small));
+    const add=(parent,k,label,fn,small,awKey)=>{const b=action(k,label,fn,small);if(awKey)b.dataset.awKey=awKey;parent.append(b);return b;};
     if(mode==='codex'){
-      if(entries.includes('new')) add(rail,'chat',isEn()?'Home':'对话首页',()=>navTo('new'),true);
-      if(hasProjects)add(rail,'folder',isEn()?'Projects':'定位项目',openProjects,true);
-      if(entries.includes('automation'))add(rail,'clock',isEn()?'Automations':'自动化任务',()=>navTo('automation'),true);
-      if(entries.includes('custom'))add(rail,'grid',isEn()?'Customizations':'技能与自定义',()=>navTo('custom'),true);
+      if(entries.includes('new')) add(rail,'chat',isEn()?'Home':'对话首页',()=>navTo('new'),true,'home');
+      if(hasProjects)add(rail,'folder',isEn()?'Projects':'定位项目',openProjects,true,'projects');
+      if(entries.includes('automation'))add(rail,'clock',isEn()?'Automations':'自动化任务',()=>navTo('automation'),true,'automation');
+      if(entries.includes('custom'))add(rail,'grid',isEn()?'Customizations':'技能与自定义',()=>navTo('custom'),true,'custom');
       const foot=el('div','aw-rail-foot');
-      if(hasStats)add(foot,'use',isEn()?'Open Usage':'打开用量统计',stats,true);
+      if(hasStats)add(foot,'use',isEn()?'Open Usage':'打开用量统计',stats,true,'usage');
 
       rail.append(foot);
       for(const n of rail.querySelectorAll('button')) n.dataset.awDest=n.getAttribute('aria-label');
@@ -301,9 +302,10 @@
   }
   function updateRailState(){
       const route=location.pathname.toLowerCase();
-      const active = /automat/.test(route)?'自动化任务':/customiz|plugin/.test(route)?'技能与自定义':/settings/.test(route)?'打开系统设置':'对话首页';
-      if(mode==='codex') for(const n of rail.querySelectorAll('[data-aw-dest]')){
-        if(n.dataset.awDest===active)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');
+      const activeKey = /automat/.test(route)?'automation':/customiz|plugin/.test(route)?'custom':/settings/.test(route)?'settings':'home';
+      const isEn = window.__agLocalZhControl?.getLang?.() === 'en';
+      if(mode==='codex') for(const n of rail.querySelectorAll('[data-aw-key]')){
+        if(n.dataset.awKey===activeKey)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');
       }
       if(mode==='codex') {
         const quota=rail.querySelector('.aw-rail-foot button');
@@ -311,8 +313,8 @@
         const pct=/^(?:100|\d{1,2})(?:\.\d+)?%$/.test(raw || '') ? raw : '';
         if(quota) {
           quota.classList.toggle('aw-quota-ring',!!pct);
-          if(pct){quota.style.setProperty('--aw-remaining',pct);quota.title='5 小时剩余 '+pct+' · 打开用量统计';}
-          else quota.title='打开用量统计';
+          if(pct){quota.style.setProperty('--aw-remaining',pct);quota.title=isEn?('5h left '+pct+' · Open Usage'):('5 小时剩余 '+pct+' · 打开用量统计');}
+          else quota.title=isEn?'Open Usage':'打开用量统计';
         }
       }
   }

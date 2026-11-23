@@ -109,7 +109,7 @@
     if (window.__agNativeRename.wasManuallyEdited(record.id)) { ignore(record.id); return; }
     const old = window.__agNativeRename.currentTitle(record.id);
     if (typeof old!=='string' || !old.trim() || /^(?:untitled(?: conversation)?|new conversation|未命名(?:对话|会话)?|无标题(?:对话|会话)?|新建对话)$/i.test(old.trim())) {last='waiting-native';return;}
-    if (((record.baseline || record.observed) && (record.baseline || record.observed)!==old) || /^(?:功能|设计|修复|优化|发布|探索|文档|研究)｜[^|｜]+ \| \d{4}$/.test(old)) {
+    if ((record.baseline && record.baseline!==old) || /^(?:功能|设计|修复|优化|发布|探索|文档|研究)｜[^|｜]+ \| \d{4}$/.test(old)) {
       ignore(record.id); return;
     }
     // 原生标题可能先显示首句预览，再异步替换为摘要；仅在稳定后才锁定预期值。
@@ -122,7 +122,7 @@
     if (record.observed!==old) {record.observed=old;record.observedAt=Date.now();return;}
     if (Date.now()-record.observedAt<1200) return;
     record.baseline=old;
-    if (record.nextMessage && messages(record.id).some(el=>norm(el.innerText)===record.nextMessage)) {
+    if (record.nextMessage && messages(record.id).some(el=>sameMessage(norm(el.innerText || el.textContent), record.nextMessage))) {
       record.message=record.nextMessage; record.nextMessage=null; record.followup=true;
     }
     const projectNames=[...document.querySelectorAll('[data-testid="project-header"]')].map(n=>{

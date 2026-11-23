@@ -1,4 +1,4 @@
-(({choose,getMode,getSettings,names,initialAccount})=>{
+(({choose,getMode,getLang,getSettings,names,namesEn,initialAccount})=>{
   const node=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
   const box=node('div');box.id='ag-local-theme-sidebar';box.dataset.awOwned='';
   const open=node('button');open.id='aw-account-control';open.type='button';open.setAttribute('aria-label','打开账号设置');
@@ -107,7 +107,9 @@
     }
   }
   function render(){
-    const shownName=profile?.name||greeting||'账号设置',shownEmail=profile?.email||(greeting?hint:'');
+    const isEn = typeof getLang==='function' && getLang()==='en';
+    const labelMap = isEn && namesEn ? namesEn : names;
+    const shownName=profile?.name||greeting||(isEn?'Account Settings':'账号设置'),shownEmail=profile?.email||(greeting?hint:'');
     if(name.textContent!==shownName)name.textContent=shownName;
     if(email.textContent!==shownEmail)email.textContent=shownEmail;email.hidden=!shownEmail;
     const pic=profile?.photo||'';
@@ -118,8 +120,13 @@
         im.onerror=()=>{if(im.parentElement===avatar)avatar.textContent=Array.from(shownName)[0]||'◉';};avatar.append(im);}
       else avatar.textContent=(profile||greeting)?Array.from(shownName)[0].toLocaleUpperCase():'◉';
     }
-    open.title=shownName+' · 打开系统设置';toggle.title=cardToggle.title='切换主题 · '+names[getMode()];
-    for(const [key,b] of options)b.setAttribute('aria-checked',String(key===getMode()));
+    open.title=shownName+(isEn?' · Open Settings':' · 打开系统设置');
+    toggle.title=cardToggle.title=(isEn?'Switch Theme · ':'切换主题 · ')+labelMap[getMode()];
+    for(const [key,b] of options){
+      b.setAttribute('aria-checked',String(key===getMode()));
+      b.title=vendors[key]+' · '+labelMap[key];
+      b.setAttribute('aria-label',labelMap[key]);
+    }
     if(!menu.hidden)position();
   }
   function update(){scanNative();if(!profile)scanGreeting();render();}

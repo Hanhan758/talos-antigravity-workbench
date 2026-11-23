@@ -42,9 +42,10 @@ function record(evidence) {
   const p=evidence.clear?null:valid(evidence.profile);
   if(!evidence.clear && (!p||p.email.toLowerCase()!==context().hint && !(disabled && p.email.toLowerCase()===hint)))return;
   if(p){cached=p;disabled=false;}
+  let tmp='';
   try{
     fs.mkdirSync(dir,{recursive:true,mode:0o700});if(!safeDir())return;
-    const tmp=path.join(dir,'.profile-'+randomUUID());fs.writeFileSync(tmp,JSON.stringify(p),{mode:0o600,flag:'wx'});fs.renameSync(tmp,file);
-  }catch{}
+    tmp=path.join(dir,'.profile-'+randomUUID());fs.writeFileSync(tmp,JSON.stringify(p),{mode:0o600,flag:'wx'});fs.renameSync(tmp,file);
+  }catch{if(tmp)try{fs.unlinkSync(tmp);}catch{}}
 }
 module.exports={context,record};

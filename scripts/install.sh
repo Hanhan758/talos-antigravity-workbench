@@ -39,13 +39,21 @@ usage() {
 EOF
 }
 
+require_arg() {
+  if [[ "$2" -lt 2 ]]; then
+    echo "错误：选项 $1 缺少参数值。" >&2
+    usage
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --app) APP_PATH="$2"; shift 2 ;;
-    --dest) DEST_APP="$2"; shift 2 ;;
-    --runtime) RUNTIME_DIR="$2"; shift 2 ;;
-    --name) DISPLAY_NAME="$2"; shift 2 ;;
-    --sign) SIGN_IDENTITY="$2"; shift 2 ;;
+    --app) require_arg "$1" $#; APP_PATH="$2"; shift 2 ;;
+    --dest) require_arg "$1" $#; DEST_APP="$2"; shift 2 ;;
+    --runtime) require_arg "$1" $#; RUNTIME_DIR="$2"; shift 2 ;;
+    --name) require_arg "$1" $#; DISPLAY_NAME="$2"; shift 2 ;;
+    --sign) require_arg "$1" $#; SIGN_IDENTITY="$2"; shift 2 ;;
     --rebuild-launcher) REBUILD_LAUNCHER=1; shift ;;
     --no-compile) NO_COMPILE=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -81,14 +89,48 @@ if ! "$NODE_BIN" -e "require('node:sqlite')" >/dev/null 2>&1; then
   exit 1
 fi
 
+# 拒绝符号链接目标（防止穿透覆盖）
+strip_trailing_slash() {
+  local p="$1"
+  while [[ "$p" != "/" && "$p" == */ ]]; do p="${p%/}"; done
+  printf '%s' "$p"
+}
+
+RAW_DEST="$(strip_trailing_slash "$DEST_APP")"
+RAW_RUNTIME="$(strip_trailing_slash "$RUNTIME_DIR")"
+if [[ -L "$RAW_DEST" ]]; then
+  echo "错误：--dest 不能是符号链接：$DEST_APP" >&2
+  exit 1
+fi
+if [[ -L "$RAW_RUNTIME" ]]; then
+  echo "错误：--runtime 不能是符号链接：$RUNTIME_DIR" >&2
+  exit 1
+fi
+
 # 路径规范化与归属安全校验（禁止覆盖原版 App、系统目录或非本项目托管的无关目录）
 normalize_path() {
-  "$NODE_BIN" -e 'const fs=require("node:fs"),p=require("node:path");const raw=process.argv[1];const abs=p.resolve(raw);try{console.log(fs.realpathSync(abs));}catch{const dir=p.dirname(abs);try{console.log(p.join(fs.realpathSync(dir),p.basename(abs)));}catch{console.log(abs);}}' "$1"
+  "$NODE_BIN" -e '
+    const fs=require("node:fs"), p=require("node:path");
+    let cur=p.resolve(process.argv[1]);
+    const tail=[];
+    while(true){
+      try{ console.log(p.join(fs.realpathSync(cur), ...tail.reverse())); break; }
+      catch{
+        const parent=p.dirname(cur);
+        if(parent===cur){ console.log(p.join(cur, ...tail.reverse())); break; }
+        tail.push(p.basename(cur)); cur=parent;
+      }
+    }
+  ' "$1"
+}
+
+xml_escape() {
+  "$NODE_BIN" -e 'const s=process.argv[1];console.log(s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'\''/g,"&apos;"));' "$1"
 }
 
 REAL_APP="$(normalize_path "$APP_PATH")"
-REAL_DEST="$(normalize_path "$DEST_APP")"
-REAL_RUNTIME="$(normalize_path "$RUNTIME_DIR")"
+REAL_DEST="$(normalize_path "$RAW_DEST")"
+REAL_RUNTIME="$(normalize_path "$RAW_RUNTIME")"
 REAL_HOME="$(normalize_path "$HOME")"
 
 reject_dangerous_target() {
@@ -119,9 +161,20 @@ if [[ "$REAL_DEST" == "$REAL_RUNTIME" || "$REAL_DEST" == "$REAL_RUNTIME/"* || "$
   exit 1
 fi
 
+# 校验通过后统一使用规范化绝对路径，避免相对路径或尾斜杠写入 Info.plist
+APP_PATH="$REAL_APP"
+DEST_APP="$REAL_DEST"
+RUNTIME_DIR="$REAL_RUNTIME"
+
 is_managed_manifest() {
   local mf="$1"
   [[ -f "$mf" ]] && "$NODE_BIN" -e 'const fs=require("node:fs");try{const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.exit(j&&j.managed_by==="talos-antigravity-workbench"?0:1);}catch{process.exit(1);}' "$mf"
+}
+
+is_legacy_runtime_dir() {
+  local dir="$1"
+  [[ -f "$dir/launch.cjs" && -f "$dir/appearance-pref.cjs" && -f "$dir/localization.js" ]] &&
+    grep -q "local\.antigravity\.zh-launcher" "$dir/appearance-pref.cjs" 2>/dev/null
 }
 
 if [[ -e "$DEST_APP" ]]; then
@@ -131,12 +184,6 @@ if [[ -e "$DEST_APP" ]]; then
     exit 1
   fi
 fi
-
-is_legacy_runtime_dir() {
-  local dir="$1"
-  [[ -f "$dir/launch.cjs" && -f "$dir/appearance-pref.cjs" && -f "$dir/localization.js" ]] &&
-    grep -q "local\.antigravity\.zh-launcher" "$dir/appearance-pref.cjs" 2>/dev/null
-}
 
 if [[ -e "$RUNTIME_DIR" ]]; then
   if ! is_managed_manifest "$RUNTIME_DIR/$MANIFEST_NAME" && ! is_legacy_runtime_dir "$RUNTIME_DIR"; then
@@ -204,20 +251,18 @@ STAGE_RUNTIME="$(mktemp -d "$RUNTIME_PARENT/.talos-agw-runtime-stage.XXXXXX")"
 STAGE_APP_DIR=""
 BACKUP_RUNTIME=""
 BACKUP_APP=""
-SWAPPED_RUNTIME=0
-SWAPPED_APP=0
 
 cleanup_on_exit() {
   local rc=$?
   if [[ $rc -ne 0 ]]; then
     echo "错误：安装/更新未完成，正在恢复旧版本..." >&2
-    if [[ "$SWAPPED_APP" -eq 1 ]]; then
+    if [[ -n "$BACKUP_APP" && -e "$BACKUP_APP" ]]; then
       rm -rf "$DEST_APP"
-      [[ -n "$BACKUP_APP" && -e "$BACKUP_APP" ]] && mv "$BACKUP_APP" "$DEST_APP" || true
+      mv "$BACKUP_APP" "$DEST_APP" || true
     fi
-    if [[ "$SWAPPED_RUNTIME" -eq 1 ]]; then
+    if [[ -n "$BACKUP_RUNTIME" && -e "$BACKUP_RUNTIME" ]]; then
       rm -rf "$RUNTIME_DIR"
-      [[ -n "$BACKUP_RUNTIME" && -e "$BACKUP_RUNTIME" ]] && mv "$BACKUP_RUNTIME" "$RUNTIME_DIR" || true
+      mv "$BACKUP_RUNTIME" "$RUNTIME_DIR" || true
     fi
   else
     [[ -n "$BACKUP_APP" && -e "$BACKUP_APP" ]] && rm -rf "$BACKUP_APP" || true
@@ -238,7 +283,7 @@ cat > "$STAGE_RUNTIME/$MANIFEST_NAME" <<EOF
 }
 EOF
 
-# 2. 若需构建启动器，先在同卷暂存目录完成编译、签名与严格验签（失败直接中断，不破坏旧版）
+# 2. 若需构建启动器，先在同卷暂存目录完成编译、XML 校验、签名与严格验签（失败直接中断，不破坏旧版）
 STAGE_APP=""
 if [[ "$NEED_BUILD_APP" -eq 1 ]]; then
   STAGE_APP_DIR="$(mktemp -d "$DEST_PARENT/.talos-agw-app-stage.XXXXXX")"
@@ -254,10 +299,18 @@ if [[ "$NEED_BUILD_APP" -eq 1 ]]; then
 }
 EOF
 
+  ESC_DISPLAY_NAME="$(xml_escape "$DISPLAY_NAME")"
+  ESC_EXECUTABLE_NAME="$(xml_escape "$EXECUTABLE_NAME")"
+  ESC_BUNDLE_ID="$(xml_escape "$BUNDLE_ID")"
+  ESC_APP_PATH="$(xml_escape "$APP_PATH")"
+  ESC_RUNTIME_DIR="$(xml_escape "$RUNTIME_DIR")"
+  ESC_NODE_BIN="$(xml_escape "$NODE_BIN")"
+
   ICON_PLIST_ENTRY=""
   if [[ "$HAS_ICON" -eq 1 ]]; then
     cp "$ICON_SRC" "$STAGE_APP/Contents/Resources/$ICON_FILE"
-    ICON_PLIST_ENTRY=$'\t<key>CFBundleIconFile</key>\n\t<string>'"$ICON_FILE"$'</string>'
+    ESC_ICON_FILE="$(xml_escape "$ICON_FILE")"
+    ICON_PLIST_ENTRY=$'\t<key>CFBundleIconFile</key>\n\t<string>'"${ESC_ICON_FILE}"$'</string>'
   fi
 
   cat > "$STAGE_APP/Contents/Info.plist" <<EOF
@@ -266,24 +319,24 @@ EOF
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>${DISPLAY_NAME}</string>
+	<string>${ESC_DISPLAY_NAME}</string>
 	<key>CFBundleExecutable</key>
-	<string>${EXECUTABLE_NAME}</string>
+	<string>${ESC_EXECUTABLE_NAME}</string>
 ${ICON_PLIST_ENTRY}
 	<key>CFBundleIdentifier</key>
-	<string>${BUNDLE_ID}</string>
+	<string>${ESC_BUNDLE_ID}</string>
 	<key>CFBundleName</key>
-	<string>${DISPLAY_NAME}</string>
+	<string>${ESC_DISPLAY_NAME}</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>AGWAppPath</key>
-	<string>${APP_PATH}</string>
+	<string>${ESC_APP_PATH}</string>
 	<key>AGWRuntimeDir</key>
-	<string>${RUNTIME_DIR}</string>
+	<string>${ESC_RUNTIME_DIR}</string>
 	<key>AGWNodePath</key>
-	<string>${NODE_BIN}</string>
+	<string>${ESC_NODE_BIN}</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSDocumentsFolderUsageDescription</key>
@@ -291,6 +344,8 @@ ${ICON_PLIST_ENTRY}
 </dict>
 </plist>
 EOF
+
+  /usr/bin/plutil -lint "$STAGE_APP/Contents/Info.plist" >/dev/null
 
   if [[ "$USE_CLANG" -eq 1 ]]; then
     clang -fobjc-arc -O2 -framework Cocoa "$LAUNCHER_SRC" -o "$STAGE_APP/Contents/MacOS/$EXECUTABLE_NAME"
@@ -312,26 +367,32 @@ if [ ! -d "$APP_PATH" ]; then
   /usr/bin/osascript -e 'display alert "未找到原版 Antigravity" message "请先安装 Google Antigravity。"' >/dev/null 2>&1 || true
   exit 1
 fi
-if /usr/bin/pgrep -x "Antigravity" >/dev/null 2>&1; then
-  /usr/bin/open -a "$APP_PATH"
-  exit 0
-fi
 GOOGLE_REQ='anchor apple generic and identifier "com.google.antigravity" and certificate leaf[subject.OU] = "EQHXZ8M8AV"'
 if ! /usr/bin/codesign --verify --strict -R="$GOOGLE_REQ" "$APP_PATH" >/dev/null 2>&1; then
   /usr/bin/osascript -e 'display alert "原版 Antigravity 官方签名校验未通过" message "目标应用未通过 Google LLC (EQHXZ8M8AV) 签名校验，启动器已停止启动。"' >/dev/null 2>&1 || true
   exit 1
 fi
+if /usr/bin/pgrep -x "Antigravity" >/dev/null 2>&1; then
+  /usr/bin/open -b "com.google.antigravity" >/dev/null 2>&1 || /usr/bin/open -a "$APP_PATH"
+  exit 0
+fi
 NODE_BIN=""
-for cand in "$PLIST_NODE" /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
-  if [ -n "$cand" ] && [ -x "$cand" ]; then NODE_BIN="$cand"; break; fi
+ZSH_NODE="$(/bin/zsh -lc 'command -v node' 2>/dev/null || true)"
+for cand in "$PLIST_NODE" /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node "$ZSH_NODE"; do
+  if [ -n "$cand" ] && [ -x "$cand" ] && "$cand" -e "require('node:sqlite')" >/dev/null 2>&1; then
+    NODE_BIN="$cand"
+    break
+  fi
 done
 if [ -z "$NODE_BIN" ]; then
-  NODE_BIN="$(/bin/zsh -lc 'command -v node' 2>/dev/null || true)"
-fi
-if [ -z "$NODE_BIN" ] || [ ! -x "$NODE_BIN" ] || ! "$NODE_BIN" -e "require('node:sqlite')" >/dev/null 2>&1; then
   /usr/bin/osascript -e 'display alert "Node.js 运行时不可用" message "需要支持内置 node:sqlite 的 Node.js v22.13 及以上，请升级后重跑 install.sh。"' >/dev/null 2>&1 || true
   exit 1
 fi
+if [ ! -f "$LAUNCH_SCRIPT" ]; then
+  /usr/bin/osascript -e 'display alert "启动器文件不完整" message "缺少运行时 launch.cjs，请重新运行 install.sh 安装。"' >/dev/null 2>&1 || true
+  exit 1
+fi
+cd "$HOME"
 export ANTIGRAVITY_APP_PATH="$APP_PATH"
 exec "$NODE_BIN" "$LAUNCH_SCRIPT"
 SHEOF
@@ -349,7 +410,6 @@ if [[ -e "$RUNTIME_DIR" ]]; then
   mv "$RUNTIME_DIR" "$BACKUP_RUNTIME"
 fi
 mv "$STAGE_RUNTIME" "$RUNTIME_DIR"
-SWAPPED_RUNTIME=1
 STAGE_RUNTIME=""
 
 if [[ "$NEED_BUILD_APP" -eq 1 ]]; then
@@ -358,7 +418,6 @@ if [[ "$NEED_BUILD_APP" -eq 1 ]]; then
     mv "$DEST_APP" "$BACKUP_APP"
   fi
   mv "$STAGE_APP" "$DEST_APP"
-  SWAPPED_APP=1
   touch "$DEST_APP"
   printf '%s\n' "$LAUNCHER_HASH" > "$HASH_FILE"
 fi

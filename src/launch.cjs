@@ -3,10 +3,11 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 const { spawn, execFileSync } = require('node:child_process');
 
-const bundle = process.env.ANTIGRAVITY_APP_PATH || '/Applications/Antigravity.app';
-const executable = bundle + '/Contents/MacOS/Antigravity';
+const bundle = path.resolve(process.env.ANTIGRAVITY_APP_PATH || '/Applications/Antigravity.app');
+const executable = path.join(bundle, 'Contents/MacOS/Antigravity');
 const profile = path.join(os.homedir(), 'Library/Caches/antigravity-local-zh');
 const statusPath = path.join(profile, 'status.json');
 const script = fs.readFileSync(path.join(__dirname, 'localization.js'), 'utf8').trim().replace(/;$/, '');
@@ -60,12 +61,16 @@ function writeStatus(phase, pages = 0, labelsFound = 0, examples = [], panel = {
   const snapshot = { phase, appPid: app.pid || null, pages, labelsFound, examples, panel, naming, appearance };
   const key = JSON.stringify(snapshot);
   if (previous === key) return;
-  const temporary = statusPath + '.' + process.pid;
-  fs.writeFileSync(temporary, JSON.stringify({ ...snapshot, updatedAt: new Date().toISOString() }) + '\n', {
-    flag: 'wx', mode: 0o600
-  });
-  fs.renameSync(temporary, statusPath);
-  previous = key;
+  const temporary = statusPath + '.' + randomUUID();
+  try {
+    fs.writeFileSync(temporary, JSON.stringify({ ...snapshot, updatedAt: new Date().toISOString() }) + '\n', {
+      flag: 'wx', mode: 0o600
+    });
+    fs.renameSync(temporary, statusPath);
+    previous = key;
+  } catch {
+    try { fs.unlinkSync(temporary); } catch {}
+  }
 }
 
 function request(method, params = {}, sessionId) {
@@ -102,7 +107,16 @@ receivePipe.on('data', chunk => {
     } else if (message.method === 'Runtime.bindingCalled' && message.params?.name === '__agLocalAppearanceChanged' &&
         (message.params.payload === 'selection' || message.params.payload === 'language' || message.params.payload === 'quota')) {
       const entry = themeSessions.get(message.sessionId);
-      if (entry) syncAppearance(message.sessionId,entry.url).catch(()=>{});
+      if (entry) {
+        syncAppearance(message.sessionId,entry.url)
+          .then(() => {
+            if (message.params.payload === 'quota') {
+              if (appearancePref.getQuota() !== 'on') quotaReader.invalidate();
+              return refreshPanel(message.sessionId, entry.url);
+            }
+          })
+          .catch(()=>{});
+      }
     } else if (message.method === 'Target.detachedFromTarget') {
       themeSessions.delete(message.params.sessionId);
       for (const [id, session] of sessions) {
@@ -300,6 +314,8 @@ async function localize(target) {
     session = (await request('Target.attachToTarget', { targetId: target.targetId, flatten: true })).sessionId;
     sessions.set(target.targetId, session);
   }
+  // 先同步外观与语言偏好，避免轮询用旧语言覆盖刚点击的新语言。
+  const appearance=await syncAppearance(session,target.url).catch(()=>null);
   const summarize = `return { applied: state?.applied === true, labels: Array.isArray(state?.labels) ? state.labels.slice(0, 100) : [] };`;
   let state = await evaluate(session, target.url,
     `if (typeof window.__agLocalZhStatus !== 'function') return 'mount'; window.__agLocalZhControl?.setLang(${JSON.stringify(appearancePref.getLang())}); const state = window.__agLocalZhStatus(); ${summarize}`);
@@ -308,7 +324,6 @@ async function localize(target) {
   }
   const naming = await syncNewTitle(session,target.url).catch(()=>({phase:'unavailable'}));
   const panel = await refreshPanel(session, target.url).catch(() => ({ mounted: false }));
-  const appearance=await syncAppearance(session,target.url).catch(()=>null);
   return { labels: state?.applied ? state.labels : [], panel, naming, appearance };
 }
 

@@ -173,7 +173,8 @@
   closeButton.type = 'button';
   closeButton.setAttribute('aria-label','关闭统计面板');
   closeButton.className = 'ag-close';
-  top.append(node('strong','用量与额度'),closeButton);
+  const headerTitle = node('strong','用量与额度');
+  top.append(headerTitle,closeButton);
   const details = node('div');
   details.className = 'ag-body';
   let showUsage=false;
@@ -231,7 +232,8 @@
     const expiresAt = Number.isFinite(source.expiresAt) ? source.expiresAt : updated + 10*60*1000;
     const isStale = rows.length>0 && (!updated || source.stale===true || now>=expiresAt);
     const countdowns = rows.map(row => resetCountdown(row.resetAt,now));
-    const sig = JSON.stringify([rows,selected,updated,status,isStale,countdowns]);
+    const lang = window.__agLocalZhControl?.getLang?.() === 'en' ? 'en' : 'zh';
+    const sig = JSON.stringify([lang,rows,selected,updated,status,isStale,countdowns]);
     if (sig === quotaSignature) return false;
     quotaSignature = sig;
     quotaStatus = status;
@@ -254,7 +256,7 @@
     return minutes+'分钟后重置';
   }
   async function requestQuota(force=false) {
-    if (requestPending) return;
+    if (requestPending || quotaStatus === 'disabled') return;
     requestPending = true;
     requestFailed = false;
     try {
@@ -419,6 +421,8 @@
       quotaInfo.append(node('small','额度组 · '+group));
     }
     const isEn = window.__agLocalZhControl?.getLang?.() === 'en';
+    const wantTitle = isEn ? 'Usage & CLI Quota' : '用量与额度';
+    if (headerTitle.textContent !== wantTitle) headerTitle.textContent = wantTitle;
     const readout = quotaStatus==='disabled' ? (isEn ? 'CLI quota disabled in Appearance' : 'CLI 额度查询已在外观设置中关闭')
       : quotaStatus==='refreshing' ? (isEn ? 'Syncing CLI quota…' : '正在同步 CLI 账号额度…')
       : staleSnapshot ? (isEn ? 'CLI quota cache expired' : 'CLI 额度缓存已过期')

@@ -22,8 +22,12 @@ function createReceipts(directory) {
   } catch {}
   function commit() {
     const temporary = path.join(directory,'.pending-titles-'+randomUUID());
-    fs.writeFileSync(temporary,JSON.stringify([...records.values()])+'\n',{flag:'wx',mode:0o600});
-    fs.renameSync(temporary,file);
+    try {
+      fs.writeFileSync(temporary,JSON.stringify([...records.values()])+'\n',{flag:'wx',mode:0o600});
+      fs.renameSync(temporary,file);
+    } catch {
+      try { fs.unlinkSync(temporary); } catch {}
+    }
   }
   function remember(id,birth,first) {
     if (!isId(id) || records.has(id) || typeof first!=='string' || !first.trim()) return;

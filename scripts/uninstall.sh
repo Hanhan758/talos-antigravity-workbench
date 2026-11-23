@@ -25,10 +25,18 @@ usage() {
 EOF
 }
 
+require_arg() {
+  if [[ "$2" -lt 2 ]]; then
+    echo "错误：选项 $1 缺少参数值。" >&2
+    usage
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dest) DEST_APP="$2"; shift 2 ;;
-    --runtime) RUNTIME_ROOT="$2"; shift 2 ;;
+    --dest) require_arg "$1" $#; DEST_APP="$2"; shift 2 ;;
+    --runtime) require_arg "$1" $#; RUNTIME_ROOT="$2"; shift 2 ;;
     --purge-cache) PURGE_CACHE=1; shift ;;
     --purge-prefs) PURGE_PREFS=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -37,18 +45,63 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+strip_trailing_slash() {
+  local p="$1"
+  while [[ "$p" != "/" && "$p" == */ ]]; do p="${p%/}"; done
+  printf '%s' "$p"
+}
+
+normalize_path() {
+  local raw="$1"
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import os,sys; p=os.path.abspath(sys.argv[1]); print(os.path.realpath(p) if os.path.exists(p) else os.path.normpath(p))' "$raw"
+  elif command -v node >/dev/null 2>&1; then
+    node -e 'const fs=require("node:fs"),p=require("node:path");const abs=p.resolve(process.argv[1]);try{console.log(fs.realpathSync(abs));}catch{console.log(abs);}' "$raw"
+  else
+    strip_trailing_slash "$raw"
+  fi
+}
+
 is_managed_manifest() {
   local mf="$1"
-  [[ -f "$mf" ]] && grep -q '"managed_by"[[:space:]]*:[[:space:]]*"talos-antigravity-workbench"' "$mf"
+  [[ -f "$mf" && ! -L "$mf" ]] && grep -q '"managed_by"[[:space:]]*:[[:space:]]*"talos-antigravity-workbench"' "$mf"
+}
+
+RAW_DEST="$(strip_trailing_slash "$DEST_APP")"
+RAW_RUNTIME="$(strip_trailing_slash "$RUNTIME_ROOT")"
+REAL_HOME="$(normalize_path "$HOME")"
+REAL_ORIG_APP="$(normalize_path "/Applications/Antigravity.app")"
+
+if [[ -L "$RAW_DEST" ]]; then
+  echo "错误：拒绝卸载符号链接目标：$DEST_APP" >&2
+  exit 1
+fi
+if [[ -L "$RAW_RUNTIME" ]]; then
+  echo "错误：拒绝卸载符号链接目标：$RUNTIME_ROOT" >&2
+  exit 1
+fi
+
+DEST_APP="$(normalize_path "$RAW_DEST")"
+RUNTIME_ROOT="$(normalize_path "$RAW_RUNTIME")"
+
+reject_protected() {
+  local target="$1"
+  case "$target" in
+    "/"|"/Applications"|"/System"|"/Library"|"/Users"|"$REAL_HOME"|"$REAL_HOME/Applications"|"$REAL_HOME/Library"|"$REAL_HOME/Library/Application Support"|"$REAL_ORIG_APP")
+      echo "错误：拒绝卸载受保护路径：$target" >&2
+      exit 1
+      ;;
+  esac
+  if [[ "$target" == "$REAL_ORIG_APP/"* ]]; then
+    echo "错误：拒绝卸载原版应用内部路径：$target" >&2
+    exit 1
+  fi
 }
 
 validate_app_target() {
   local target="$1"
+  reject_protected "$target"
   [[ ! -e "$target" ]] && return 0
-  if [[ "$target" == "/" || "$target" == "/Applications" || "$target" == "/Applications/Antigravity.app" || "$target" == "$HOME" ]]; then
-    echo "错误：拒绝卸载受保护路径：$target" >&2
-    exit 1
-  fi
   local bid
   bid="$(/usr/bin/defaults read "$target/Contents/Info.plist" CFBundleIdentifier 2>/dev/null || true)"
   if ! is_managed_manifest "$target/Contents/Resources/$MANIFEST_NAME" && [[ "$bid" != "$BUNDLE_ID" ]]; then
@@ -57,14 +110,16 @@ validate_app_target() {
   fi
 }
 
+RUNTIME_DELETE_MODE="none"
 validate_runtime_target() {
   local target="$1"
+  reject_protected "$target"
   [[ ! -e "$target" ]] && return 0
-  if [[ "$target" == "/" || "$target" == "$HOME" || "$target" == "$HOME/Library" || "$target" == "$HOME/Library/Application Support" ]]; then
-    echo "错误：拒绝卸载受保护路径：$target" >&2
-    exit 1
-  fi
-  if ! is_managed_manifest "$target/$MANIFEST_NAME" && ! is_managed_manifest "$target/runtime/$MANIFEST_NAME"; then
+  if is_managed_manifest "$target/$MANIFEST_NAME"; then
+    RUNTIME_DELETE_MODE="direct"
+  elif is_managed_manifest "$target/runtime/$MANIFEST_NAME"; then
+    RUNTIME_DELETE_MODE="subdir"
+  else
     echo "错误：目标目录缺少本项目归属清单（拒绝删除）：$target" >&2
     exit 1
   fi
@@ -78,7 +133,11 @@ PROFILE_CACHE_DIR="$HOME/Library/Application Support/Antigravity 中文启动器
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "[dry-run] 将卸载启动器：$DEST_APP"
-  echo "[dry-run] 将移除运行时：$RUNTIME_ROOT"
+  if [[ "$RUNTIME_DELETE_MODE" == "direct" ]]; then
+    echo "[dry-run] 将移除运行时目录：$RUNTIME_ROOT"
+  elif [[ "$RUNTIME_DELETE_MODE" == "subdir" ]]; then
+    echo "[dry-run] 将移除运行时子目录：$RUNTIME_ROOT/runtime（若父目录为空再清理）"
+  fi
   [[ "$PURGE_CACHE" -eq 1 ]] && echo "[dry-run] 将清理缓存：$CACHE_DIR 与 $PROFILE_CACHE_DIR"
   [[ "$PURGE_PREFS" -eq 1 ]] && echo "[dry-run] 将清理偏好：local.antigravity.zh-launcher"
   exit 0
@@ -91,9 +150,14 @@ else
   echo "ℹ️  未找到启动器：$DEST_APP"
 fi
 
-if [[ -d "$RUNTIME_ROOT" ]]; then
+if [[ "$RUNTIME_DELETE_MODE" == "direct" && -d "$RUNTIME_ROOT" ]]; then
   rm -rf "$RUNTIME_ROOT"
   echo "✅ 已移除运行时：$RUNTIME_ROOT"
+elif [[ "$RUNTIME_DELETE_MODE" == "subdir" && -d "$RUNTIME_ROOT/runtime" ]]; then
+  rm -rf "$RUNTIME_ROOT/runtime"
+  rm -f "$RUNTIME_ROOT/launcher.sha256"
+  rmdir "$RUNTIME_ROOT" 2>/dev/null || true
+  echo "✅ 已移除运行时：$RUNTIME_ROOT/runtime"
 fi
 
 if [[ "$PURGE_CACHE" -eq 1 ]]; then

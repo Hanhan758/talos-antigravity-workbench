@@ -59,7 +59,7 @@
     pendingLang={id:crypto.randomUUID(),lang};
     langSaveError=false;
     try { window.__agLocalZhControl?.setLang(lang); } catch {}
-    renderSettingsRows();
+    mount();
     try { window.__agLocalAppearanceChanged?.('language'); } catch {}
   }
   function chooseQuota(next) {
@@ -67,10 +67,13 @@
     currentQuota=next;
     pendingQuota={id:crypto.randomUUID(),quota:next};
     quotaSaveError=false;
+    if(next==='off') {
+      try { window.__agQuotaSummary?.apply({status:'disabled',items:[],seenAt:0,expiresAt:0,stale:false,source:'cli'}); } catch {}
+    }
     renderSettingsRows();
     try { window.__agLocalAppearanceChanged?.('quota'); } catch {}
   }
-  const account=(__AG_ACCOUNT_FOOTER__)({choose,getMode:()=>current,getSettings:()=>layout.settingsTarget(settingAnchor),names,initialAccount});
+  const account=(__AG_ACCOUNT_FOOTER__)({choose,getMode:()=>current,getLang:()=>currentLang,getSettings:()=>layout.settingsTarget(settingAnchor),names,namesEn,initialAccount});
   const side=account.element,cardSlot=document.createElement('span');
   cardSlot.id='ag-local-theme-card-slot';cardSlot.append(account.cardToggle);
 

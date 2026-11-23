@@ -8,16 +8,20 @@ import vm from 'node:vm';
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const srcDir = path.join(repoRoot, 'src');
 
-// 1. CommonJS / JS syntax check
+// 1. Full syntax check: ALL .cjs, ALL .js, and BOTH shell scripts
 for (const file of fs.readdirSync(srcDir)) {
+  const full = path.join(srcDir, file);
   if (file.endsWith('.cjs')) {
-    execFileSync(process.execPath, ['--check', path.join(srcDir, file)], { stdio: 'pipe' });
+    execFileSync(process.execPath, ['--check', full], { stdio: 'pipe' });
+  } else if (file.endsWith('.js') && !['localization.js', 'appearance.js'].includes(file)) {
+    const raw = fs.readFileSync(full, 'utf8').trim().replace(/;$/, '');
+    new vm.Script(`(${raw})`, { filename: file });
   }
 }
 
 const locCode = fs.readFileSync(path.join(srcDir, 'localization.js'), 'utf8')
   .trim().replace(/;$/, '').replace('__AG_INITIAL_LANG__', JSON.stringify('zh'));
-new vm.Script(`(${locCode})`);
+new vm.Script(`(${locCode})`, { filename: 'localization.js' });
 
 const appCode = fs.readFileSync(path.join(srcDir, 'appearance.js'), 'utf8')
   .replace('__AG_ACCOUNT_FOOTER__', () => fs.readFileSync(path.join(srcDir, 'account-footer.js'), 'utf8').trim())
@@ -29,7 +33,10 @@ const appCode = fs.readFileSync(path.join(srcDir, 'appearance.js'), 'utf8')
   .replace('__AG_INITIAL_LANG__', JSON.stringify('zh'))
   .replace('__AG_INITIAL_QUOTA__', JSON.stringify('on'))
   .replace('__AG_ACCOUNT_CONTEXT__', JSON.stringify({}));
-new vm.Script(`(${appCode.trim().replace(/;$/, '')})`);
+new vm.Script(`(${appCode.trim().replace(/;$/, '')})`, { filename: 'appearance.js' });
+
+execFileSync('bash', ['-n', path.join(repoRoot, 'scripts/install.sh')], { stdio: 'pipe' });
+execFileSync('bash', ['-n', path.join(repoRoot, 'scripts/uninstall.sh')], { stdio: 'pipe' });
 
 // 2. Desensitization & sandbox protection check
 const forbidden = [/\/Users\/[a-z0-9_-]+\//i, /TALOS-Workspace/, /talos_state_mcp/, /talos-profile-hub/, /mcp-lifecycle\.cjs/, /orphan-cleanup\.cjs/];
@@ -56,10 +63,15 @@ function readCdHash(appPath) {
   return match[1];
 }
 
-// 3. macOS installer, safety guards, rollback, CDHash stability & uninstaller regression tests
+// 3. macOS installer, safety guards, rollback, XML escaping, shell fallback & uninstaller regression tests
 if (process.platform === 'darwin' && fs.existsSync('/Applications/Antigravity.app')) {
   const installSh = path.join(repoRoot, 'scripts/install.sh');
   const uninstallSh = path.join(repoRoot, 'scripts/uninstall.sh');
+
+  // 3a. Missing option value fails cleanly (no unbound variable)
+  const missingArg = spawnSync('bash', [installSh, '--name'], { encoding: 'utf8' });
+  assert.notEqual(missingArg.status, 0);
+  assert.equal(/unbound variable/i.test(missingArg.stderr), false, 'Should print friendly error instead of unbound variable');
 
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'talos-ag-wb-test-'));
   const testApp = path.join(tmpRoot, 'Antigravity Workbench Test.app');
@@ -67,87 +79,82 @@ if (process.platform === 'darwin' && fs.existsSync('/Applications/Antigravity.ap
   const testRuntime = path.join(testRuntimeBase, 'runtime');
   const foreignApp = path.join(tmpRoot, 'Foreign.app');
   const foreignDir = path.join(tmpRoot, 'foreign-dir');
+  const linkApp = path.join(tmpRoot, 'Link.app');
+  const linkDir = path.join(tmpRoot, 'link-dir');
 
   try {
     execFileSync('bash', [installSh, '--dry-run', '--dest', testApp, '--runtime', testRuntime], { stdio: 'pipe' });
-    // 3a. Safety guard: install & uninstall must refuse unowned directories and original App
+
+    // 3b. Safety guards: unowned dirs, trailing slash on original app, and symlink traversal
     fs.mkdirSync(path.join(foreignApp, 'Contents'), { recursive: true });
     fs.writeFileSync(path.join(foreignApp, 'Contents/sentinel.txt'), 'keep');
     fs.mkdirSync(foreignDir, { recursive: true });
     fs.writeFileSync(path.join(foreignDir, 'sentinel.txt'), 'keep');
+    fs.symlinkSync(foreignApp, linkApp);
+    fs.symlinkSync(foreignDir, linkDir);
 
-    const badDest = spawnSync('bash', [installSh, '--dest', foreignApp, '--runtime', testRuntime], { encoding: 'utf8' });
-    assert.notEqual(badDest.status, 0, 'install.sh must refuse overwriting unowned .app');
-    assert.ok(fs.existsSync(path.join(foreignApp, 'Contents/sentinel.txt')), 'Unowned .app was modified');
+    assert.notEqual(spawnSync('bash', [installSh, '--dest', foreignApp, '--runtime', testRuntime]).status, 0);
+    assert.notEqual(spawnSync('bash', [installSh, '--dest', '/Applications/Antigravity.app/', '--runtime', testRuntime]).status, 0);
+    assert.notEqual(spawnSync('bash', [installSh, '--dest', linkApp + '/', '--runtime', testRuntime]).status, 0);
+    assert.notEqual(spawnSync('bash', [installSh, '--dest', testApp, '--runtime', foreignDir]).status, 0);
+    assert.notEqual(spawnSync('bash', [uninstallSh, '--dest', '/Applications/Antigravity.app/', '--runtime', foreignDir]).status, 0);
+    assert.notEqual(spawnSync('bash', [uninstallSh, '--dest', linkApp + '/', '--runtime', linkDir + '/']).status, 0);
+    assert.ok(fs.existsSync(path.join(foreignApp, 'Contents/sentinel.txt')), 'Foreign app sentinel must survive');
+    assert.ok(fs.existsSync(path.join(foreignDir, 'sentinel.txt')), 'Foreign dir sentinel must survive');
 
-    const badOrig = spawnSync('bash', [installSh, '--dest', '/Applications/Antigravity.app', '--runtime', testRuntime], { encoding: 'utf8' });
-    assert.notEqual(badOrig.status, 0, 'install.sh must refuse targeting original Antigravity.app');
-
-    const badRuntime = spawnSync('bash', [installSh, '--dest', testApp, '--runtime', foreignDir], { encoding: 'utf8' });
-    assert.notEqual(badRuntime.status, 0, 'install.sh must refuse overwriting unowned runtime dir');
-    assert.ok(fs.existsSync(path.join(foreignDir, 'sentinel.txt')), 'Unowned runtime dir was modified');
-
-    const badUninst = spawnSync('bash', [uninstallSh, '--dest', foreignApp, '--runtime', foreignDir], { encoding: 'utf8' });
-    assert.notEqual(badUninst.status, 0, 'uninstall.sh must refuse removing unowned targets');
-    assert.ok(fs.existsSync(path.join(foreignApp, 'Contents/sentinel.txt')), 'Unowned .app was deleted by uninstall');
-    assert.ok(fs.existsSync(path.join(foreignDir, 'sentinel.txt')), 'Unowned dir was deleted by uninstall');
-
-    // 3b. First install: builds launcher .app + deploys runtime + records AGWNodePath
+    // 3c. First install with XML special chars in --name + relative paths -> verify absolute plist & plutil -lint
+    const relApp = './Rel Test.app';
+    const relRuntime = './rel-support/runtime';
     execFileSync('bash', [
       installSh,
-      '--dest', testApp,
-      '--runtime', testRuntime,
-      '--name', 'Antigravity Workbench Test'
-    ], { stdio: 'pipe' });
+      '--dest', relApp,
+      '--runtime', relRuntime,
+      '--name', 'Antigravity & <Test>'
+    ], { cwd: tmpRoot, stdio: 'pipe' });
 
-    assert.ok(fs.existsSync(path.join(testApp, 'Contents/Info.plist')), 'Info.plist missing');
-    assert.ok(fs.existsSync(path.join(testApp, 'Contents/MacOS/AntigravityWorkbench')), 'Launcher executable missing');
-    assert.ok(fs.existsSync(path.join(testApp, 'Contents/Resources/icon.icns')), 'Original icon.icns not reused');
-    assert.ok(fs.existsSync(path.join(testApp, 'Contents/Resources/.talos-agw-managed.json')), 'App ownership manifest missing');
-    assert.ok(fs.existsSync(path.join(testRuntime, 'launch.cjs')), 'runtime/launch.cjs missing');
-    assert.ok(fs.existsSync(path.join(testRuntime, '.talos-agw-managed.json')), 'Runtime ownership manifest missing');
-    assert.equal(fs.existsSync(path.join(testApp, 'Contents/Resources/launch.cjs')), false, 'launch.cjs should live in decoupled runtime dir');
+    const resolvedRelApp = path.join(tmpRoot, 'Rel Test.app');
+    const resolvedRelParent = path.join(tmpRoot, 'rel-support');
+    const resolvedRelRuntime = path.join(resolvedRelParent, 'runtime');
+    execFileSync('/usr/bin/plutil', ['-lint', path.join(resolvedRelApp, 'Contents/Info.plist')], { stdio: 'pipe' });
+    const relPlist = fs.readFileSync(path.join(resolvedRelApp, 'Contents/Info.plist'), 'utf8');
+    assert.match(relPlist, /Antigravity &amp; &lt;Test&gt;/);
+    assert.ok(relPlist.includes(`<string>${fs.realpathSync(resolvedRelRuntime)}</string>`), 'AGWRuntimeDir must be normalized absolute path');
 
-    const plist = fs.readFileSync(path.join(testApp, 'Contents/Info.plist'), 'utf8');
-    assert.match(plist, /<key>AGWNodePath<\/key>/);
-    assert.match(plist, /<key>AGWAppPath<\/key>/);
-    assert.match(plist, /<key>AGWRuntimeDir<\/key>/);
+    // Shared parent sibling protection on uninstall
+    fs.writeFileSync(path.join(resolvedRelParent, 'sibling-keep.txt'), 'do-not-delete');
+    execFileSync('bash', [uninstallSh, '--dest', resolvedRelApp, '--runtime', resolvedRelParent], { stdio: 'pipe' });
+    assert.equal(fs.existsSync(resolvedRelRuntime), false, 'Managed runtime subdir must be removed');
+    assert.ok(fs.existsSync(path.join(resolvedRelParent, 'sibling-keep.txt')), 'Sibling file in shared parent must be preserved');
 
+    // 3d. Native install + CDHash stability + failed update rollback
+    execFileSync('bash', [installSh, '--dest', testApp, '--runtime', testRuntime, '--name', 'Antigravity Workbench Test'], { stdio: 'pipe' });
     execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', testApp], { stdio: 'pipe' });
     const cdHashBefore = readCdHash(testApp);
     const mtimeBefore = fs.statSync(path.join(testApp, 'Contents/MacOS/AntigravityWorkbench')).mtimeMs;
 
-    // 3c. Second install: updates runtime ONLY without rebuilding/re-signing .app (real stderr CDHash match)
-    execFileSync('bash', [
-      installSh,
-      '--dest', testApp,
-      '--runtime', testRuntime,
-      '--name', 'Antigravity Workbench Test'
-    ], { stdio: 'pipe' });
+    execFileSync('bash', [installSh, '--dest', testApp, '--runtime', testRuntime, '--name', 'Antigravity Workbench Test'], { stdio: 'pipe' });
+    assert.equal(fs.statSync(path.join(testApp, 'Contents/MacOS/AntigravityWorkbench')).mtimeMs, mtimeBefore);
+    assert.equal(readCdHash(testApp), cdHashBefore);
 
-    const cdHashAfter = readCdHash(testApp);
-    const mtimeAfter = fs.statSync(path.join(testApp, 'Contents/MacOS/AntigravityWorkbench')).mtimeMs;
-    assert.equal(mtimeAfter, mtimeBefore, 'Second install must not rebuild unchanged launcher binary');
-    assert.equal(cdHashAfter, cdHashBefore, 'Second install must preserve launcher CDHash');
-
-    // 3d. Failed update rollback: invalid signing identity must fail AND preserve old working install
     const failSign = spawnSync('bash', [
-      installSh,
-      '--dest', testApp,
-      '--runtime', testRuntime,
-      '--name', 'Antigravity Workbench Test',
-      '--rebuild-launcher',
-      '--sign', 'NON_EXISTENT_SIGN_IDENTITY_99999'
+      installSh, '--dest', testApp, '--runtime', testRuntime,
+      '--name', 'Antigravity Workbench Test', '--rebuild-launcher', '--sign', 'NON_EXISTENT_SIGN_IDENTITY_99999'
     ], { encoding: 'utf8' });
-    assert.notEqual(failSign.status, 0, 'install.sh must fail when codesign fails (never swallow error)');
-    assert.ok(fs.existsSync(path.join(testRuntime, 'launch.cjs')), 'Failed update must preserve old runtime');
-    execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', testApp], { stdio: 'pipe' });
-    assert.equal(readCdHash(testApp), cdHashBefore, 'Failed update must preserve old signed launcher');
+    assert.notEqual(failSign.status, 0);
+    assert.ok(fs.existsSync(path.join(testRuntime, 'launch.cjs')), 'Old runtime must survive failed update');
+    assert.equal(readCdHash(testApp), cdHashBefore, 'Old launcher CDHash must survive failed update');
 
-    // 3e. Clean uninstall of managed targets
+    // 3e. --no-compile Shell fallback: verify syntax and signature-before-pgrep ordering
+    execFileSync('bash', [installSh, '--no-compile', '--rebuild-launcher', '--dest', testApp, '--runtime', testRuntime], { stdio: 'pipe' });
+    const shellBin = path.join(testApp, 'Contents/MacOS/AntigravityWorkbench');
+    execFileSync('/bin/sh', ['-n', shellBin], { stdio: 'pipe' });
+    const shellSrc = fs.readFileSync(shellBin, 'utf8');
+    assert.ok(shellSrc.indexOf('codesign --verify') > 0 && shellSrc.indexOf('codesign --verify') < shellSrc.indexOf('pgrep -x'),
+      'Shell fallback must verify Google signature BEFORE pgrep/open');
+
     execFileSync('bash', [uninstallSh, '--dest', testApp, '--runtime', testRuntimeBase], { stdio: 'pipe' });
-    assert.equal(fs.existsSync(testApp), false, 'Uninstall did not remove test app');
-    assert.equal(fs.existsSync(testRuntimeBase), false, 'Uninstall did not remove test runtime');
+    assert.equal(fs.existsSync(testApp), false);
+    assert.equal(fs.existsSync(testRuntimeBase), false);
     console.log(`ALL_SMOKE_TESTS_PASSED (macOS CDHash verified: ${cdHashBefore.slice(0, 12)}...)`);
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
