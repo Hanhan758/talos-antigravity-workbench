@@ -24,7 +24,7 @@
 
 - **操作系统**：macOS（已验证 Apple Silicon + Google Antigravity `2.34.0`）
 - **原版应用**：已安装官方 `/Applications/Antigravity.app`
-- **运行时**：Node.js `v20+`（安装器如检测到 `clang` 会编译原生轻量启动器，未安装 Xcode CLT 时自动降级为轻量 Shell 启动入口）
+- **运行时**：Node.js `v22.5+`（需内置 `node:sqlite` 支持；安装器如检测到 `clang` 会编译原生轻量启动器，未安装 Xcode CLT 时自动降级为轻量 Shell 启动入口）
 
 ---
 

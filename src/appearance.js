@@ -152,6 +152,9 @@
 
   function mountSettingsRows() {
     renderSettingsRows();
+    if(themeRow.isConnected && langRow.isConnected) return;
+    if(!/settings/i.test(location.pathname+location.hash) &&
+       !document.querySelector('dialog[open],[role="dialog"],[aria-modal="true"],[data-testid*="settings"],[class~="group/nav-item"]')) return;
     const target=findAppearanceCard();
     if(!target) return;
     const {card,themeRow:nativeThemeRow,lastRow}=target;

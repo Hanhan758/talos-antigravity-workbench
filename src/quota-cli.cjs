@@ -1,12 +1,24 @@
 'use strict';
 
+const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
 const { promisify } = require('node:util');
 
 const runFile = promisify(execFile);
-const cli = path.join(os.homedir(), '.local/bin/agy');
+function resolveCli() {
+  const candidates = [
+    process.env.ANTIGRAVITY_CLI_PATH,
+    path.join(os.homedir(), '.local/bin/agy'),
+    '/opt/homebrew/bin/agy',
+    '/usr/local/bin/agy'
+  ].filter(Boolean);
+  for (const cand of candidates) {
+    try { fs.accessSync(cand, fs.constants.X_OK); return cand; } catch {}
+  }
+  return path.join(os.homedir(), '.local/bin/agy');
+}
 const signature = 'anchor apple generic and identifier "cli" and certificate leaf[subject.OU] = "EQHXZ8M8AV"';
 const cacheLifetime = 10 * 60 * 1000;
 const groups = new Map([['gemini models', 'Gemini 模型'], ['claude and gpt models', 'Claude 与 GPT 模型']]);
@@ -47,7 +59,7 @@ function parseUsage(output) {
 }
 
 // 给这次额度查询一个独立的进程组，以便在查询结束或中断时一并回收它创建的子进程。
-function runQuotaCommand(options,signal) {
+function runQuotaCommand(cli, options, signal) {
   return new Promise((resolve,reject) => {
     if (signal.aborted) return reject(new Error('额度查询已取消'));
     const home = os.homedir();
@@ -94,6 +106,7 @@ function runQuotaCommand(options,signal) {
 }
 
 async function fetchQuota(signal) {
+  const cli = resolveCli();
   const options = {
     cwd:'/private/var/empty',
     env:{HOME:os.homedir(), PATH:'/usr/bin:/bin:/usr/sbin:/sbin', TMPDIR:os.tmpdir(), LANG:'en_US.UTF-8'}
@@ -101,7 +114,7 @@ async function fetchQuota(signal) {
   await runFile('/usr/bin/codesign',['--verify','--strict','-R='+signature,cli],{
     ...options,encoding:'utf8',timeout:8000,maxBuffer:192*1024,signal
   });
-  return parseUsage(await runQuotaCommand(options,signal));
+  return parseUsage(await runQuotaCommand(cli, options, signal));
 }
 
 function createQuotaReader() {

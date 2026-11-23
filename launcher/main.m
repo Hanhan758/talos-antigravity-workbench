@@ -52,7 +52,9 @@ static void showAlert(NSString *title, NSString *info) {
 int main(int argc, const char *argv[]) {
   @autoreleasepool {
     NSProcessInfo *proc = [NSProcessInfo processInfo];
-    NSString *appPath = proc.environment[@"ANTIGRAVITY_APP_PATH"] ?: @"/Applications/Antigravity.app";
+    NSBundle *mainBundle = [NSBundle mainBundle];
+    NSString *plistApp = [mainBundle objectForInfoDictionaryKey:@"AGWAppPath"];
+    NSString *appPath = proc.environment[@"ANTIGRAVITY_APP_PATH"] ?: (plistApp.length > 0 ? plistApp : @"/Applications/Antigravity.app");
     NSFileManager *fm = [NSFileManager defaultManager];
 
     if (![fm fileExistsAtPath:appPath]) {
@@ -77,13 +79,14 @@ int main(int argc, const char *argv[]) {
     NSString *nodePath = resolveNodePath();
     if (!nodePath) {
       showAlert(@"未找到 Node.js",
-                @"请先安装 Node.js（建议 v20 及以上），例如执行 brew install node。");
+                @"请先安装 Node.js（需要 v22.5 及以上以支持内置 node:sqlite），例如执行 brew install node。");
       return 1;
     }
 
+    NSString *plistRuntime = [mainBundle objectForInfoDictionaryKey:@"AGWRuntimeDir"];
     NSString *runtimeDir = proc.environment[@"TALOS_AGW_RUNTIME"];
     if (runtimeDir.length == 0) {
-      runtimeDir = [NSHomeDirectory() stringByAppendingPathComponent:
+      runtimeDir = plistRuntime.length > 0 ? plistRuntime : [NSHomeDirectory() stringByAppendingPathComponent:
           @"Library/Application Support/talos-antigravity-workbench/runtime"];
     }
     NSString *scriptPath = [runtimeDir stringByAppendingPathComponent:@"launch.cjs"];

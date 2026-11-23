@@ -64,13 +64,12 @@ if [[ ! -d "$APP_PATH" ]]; then
 fi
 
 if ! command -v node >/dev/null 2>&1; then
-  echo "错误：未找到 Node.js，请先安装 Node.js v20 及以上（例如 brew install node）。" >&2
+  echo "错误：未找到 Node.js，请先安装 Node.js v22.5 及以上（例如 brew install node）。" >&2
   exit 1
 fi
 
-NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-if [[ "$NODE_MAJOR" -lt 20 ]]; then
-  echo "错误：需要 Node.js v20 及以上，当前版本：$(node -v)" >&2
+if ! node -e "require('node:sqlite')" >/dev/null 2>&1; then
+  echo "错误：当前 Node.js ($(node -v)) 不支持内置 node:sqlite，请升级到 Node.js v22.5 及以上。" >&2
   exit 1
 fi
 
@@ -97,7 +96,7 @@ fi
 
 LAUNCHER_HASH="$(
   {
-    printf '%s\n' "$DISPLAY_NAME" "$BUNDLE_ID" "$EXECUTABLE_NAME" "$SIGN_IDENTITY" "$USE_CLANG" "$ICON_FILE" "$ICON_HASH"
+    printf '%s\n' "$APP_PATH" "$RUNTIME_DIR" "$DISPLAY_NAME" "$BUNDLE_ID" "$EXECUTABLE_NAME" "$SIGN_IDENTITY" "$USE_CLANG" "$ICON_FILE" "$ICON_HASH"
     [[ -f "$LAUNCHER_SRC" ]] && cat "$LAUNCHER_SRC"
   } | shasum -a 256 | awk '{print $1}'
 )"
@@ -163,6 +162,10 @@ ${ICON_PLIST_ENTRY}
 	<string>APPL</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>AGWAppPath</key>
+	<string>${APP_PATH}</string>
+	<key>AGWRuntimeDir</key>
+	<string>${RUNTIME_DIR}</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSDocumentsFolderUsageDescription</key>
@@ -179,10 +182,13 @@ EOF
 set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 RES_DIR="$(CDPATH= cd -- "$SCRIPT_DIR/../Resources" && pwd)"
-RUNTIME_DIR="${TALOS_AGW_RUNTIME:-$HOME/Library/Application Support/talos-antigravity-workbench/runtime}"
+PLIST="$SCRIPT_DIR/../Info.plist"
+PLIST_RUNTIME="$(/usr/bin/defaults read "$PLIST" AGWRuntimeDir 2>/dev/null || true)"
+PLIST_APP="$(/usr/bin/defaults read "$PLIST" AGWAppPath 2>/dev/null || true)"
+RUNTIME_DIR="${TALOS_AGW_RUNTIME:-${PLIST_RUNTIME:-$HOME/Library/Application Support/talos-antigravity-workbench/runtime}}"
 LAUNCH_SCRIPT="$RUNTIME_DIR/launch.cjs"
 [ -f "$LAUNCH_SCRIPT" ] || LAUNCH_SCRIPT="$RES_DIR/launch.cjs"
-APP_PATH="${ANTIGRAVITY_APP_PATH:-/Applications/Antigravity.app}"
+APP_PATH="${ANTIGRAVITY_APP_PATH:-${PLIST_APP:-/Applications/Antigravity.app}}"
 if [ ! -d "$APP_PATH" ]; then
   /usr/bin/osascript -e 'display alert "未找到原版 Antigravity" message "请先安装 Google Antigravity。"' >/dev/null 2>&1 || true
   exit 1

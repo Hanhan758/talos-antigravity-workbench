@@ -36,11 +36,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 CACHE_DIR="$HOME/Library/Caches/antigravity-local-zh"
+PROFILE_CACHE_DIR="$HOME/Library/Application Support/Antigravity 中文启动器"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "[dry-run] 将卸载启动器：$DEST_APP"
   echo "[dry-run] 将移除运行时：$RUNTIME_ROOT"
-  [[ "$PURGE_CACHE" -eq 1 ]] && echo "[dry-run] 将清理缓存：$CACHE_DIR"
+  [[ "$PURGE_CACHE" -eq 1 ]] && echo "[dry-run] 将清理缓存：$CACHE_DIR 与 $PROFILE_CACHE_DIR"
   [[ "$PURGE_PREFS" -eq 1 ]] && echo "[dry-run] 将清理偏好：local.antigravity.zh-launcher"
   exit 0
 fi
@@ -57,9 +58,15 @@ if [[ -d "$RUNTIME_ROOT" ]]; then
   echo "✅ 已移除运行时：$RUNTIME_ROOT"
 fi
 
-if [[ "$PURGE_CACHE" -eq 1 && -d "$CACHE_DIR" ]]; then
-  rm -rf "$CACHE_DIR"
-  echo "✅ 已清理缓存：$CACHE_DIR"
+if [[ "$PURGE_CACHE" -eq 1 ]]; then
+  if [[ -d "$CACHE_DIR" ]]; then
+    rm -rf "$CACHE_DIR"
+    echo "✅ 已清理缓存：$CACHE_DIR"
+  fi
+  if [[ -d "$PROFILE_CACHE_DIR" ]]; then
+    rm -rf "$PROFILE_CACHE_DIR"
+    echo "✅ 已清理账号展示缓存：$PROFILE_CACHE_DIR"
+  fi
 fi
 
 if [[ "$PURGE_PREFS" -eq 1 ]]; then

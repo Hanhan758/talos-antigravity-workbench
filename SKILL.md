@@ -12,7 +12,7 @@ description: 在 macOS 上无侵入安装、更新或卸载 TALOS Antigravity �
 确认以下前提：
 - 系统为 macOS（`uname -s` 为 `Darwin`）
 - 已安装原版 `/Applications/Antigravity.app`（或用户指定的路径）
-- 已安装 Node.js v20 及以上（`node -v`）
+- 已安装 Node.js v22.5 及以上（支持内置 `node:sqlite`，可通过 `node -e "require('node:sqlite')"` 验证）
 
 ## 2. 执行安装或更新
 
