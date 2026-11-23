@@ -7,7 +7,7 @@
   const valid = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
   const editor = '[contenteditable="true"],textarea,[role="textbox"]';
   const composer = '[id="antigravity.agentSidePanelInputBox"]';
-  const newControl = '[data-testid="new-conversation-button"],[data-testid="app-icon-new-conversation-button"]';
+  const newControl = '[data-testid*="new-conversation"],[data-aw-command="new"],[aria-label*="New Conversation" i],[aria-label*="新建对话"]';
   const titleEditor = '[data-testid="inline-edit-input"],[data-testid="rename-conversation-input"]';
   const userMsg = '[data-testid="user-message-content"]';
   const viewSel = '[data-testid="conversation-view"]';
@@ -144,6 +144,12 @@
       } else retire(record.id);
     }).catch(()=>{ retire(record.id);last='unconfirmed'; });
   }
+  const sameMessage = (rendered, draftMsg) => {
+    if (!rendered || !draftMsg) return false;
+    if (rendered === draftMsg) return true;
+    const a = rendered.slice(0, 64), b = draftMsg.slice(0, 64);
+    return a.length >= 4 && b.length >= 4 && (rendered.includes(b) || draftMsg.includes(a));
+  };
   function probe() {
     const id=current();
     if (id && named.has(id)) consider(named.get(id));
@@ -151,8 +157,9 @@
     if (draft?.message && id && !draft.known.has(id) && !named.has(id)) {
       const first=messages(id)[0];
       // Native acceptance is the proof of submission, including send paths that don't dispatch a click.
-      if (first && norm(first.innerText || first.textContent)===draft.message) {
-        return {id,first:draft.message,since:draft.since,sentAt:draft.sentAt,phase:'check-creation',handled};
+      const rendered = first ? norm(first.innerText || first.textContent) : '';
+      if (sameMessage(rendered, draft.message)) {
+        return {id,first:rendered || draft.message,since:draft.since,sentAt:draft.sentAt,phase:'check-creation',handled};
       }
     }
     const record=named.get(id);
@@ -164,9 +171,11 @@
     if (birth===false) { draft=null;last='existing';return; }
     if (!Number.isFinite(birth)) return;
     const accepted=messages(id)[0];
-    if (!accepted || norm(accepted.innerText || accepted.textContent)!==draft.message) return;
+    const rendered = accepted ? norm(accepted.innerText || accepted.textContent) : '';
+    if (!sameMessage(rendered, draft.message)) return;
+    const firstMsg = rendered || draft.message;
     if (named.size>=32) named.delete(named.keys().next().value);
-    named.set(id,{id,first:draft.message,message:draft.message,createdAt:birth,tries:0,saving:false});
+    named.set(id,{id,first:firstMsg,message:firstMsg,createdAt:birth,tries:0,saving:false});
     draft=null;last='new';
     consider(named.get(id));
   }

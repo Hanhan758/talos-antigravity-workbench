@@ -58,14 +58,10 @@
 
   // 名称取自原生标题、用户原话或已显示的项目名称。别名只在同时有英文原文作证时使用。
   const aliases = [
-    ['Talos Root Atlas','塔洛斯根图谱'],['Talos-State','塔洛斯状态服务'],['Talos System','塔洛斯系统'],
-    ['Super Brain','超级大脑'],['Antigravity','谷歌反重力','反重力'],['Andrej Karpathy','安德烈·卡帕西'],
-    ['LLM Wiki','大模型知识库'],['Google One AI Premium','谷歌高级人工智能会员'],
+    ['Antigravity','谷歌反重力','反重力'],
     ['Anthropic','安索匹克'],['Obsidian','黑曜石'],['OpenAI','开放人工智能公司','开放人工智能'],
-    ['Cloudflare','克劳德弗莱尔'],['GitHub','开源代码托管平台'],['MDLDM-Maitian','麦田项目'],
-    ['DeepSeek Harness','深度求索执行框架'],['WorkBuddy','工作搭子'],['Codex','法典编程助手'],
-    ['Pachat','帕恰特'],['Octo','奥克托'],['Tern','燕鸥'],['Tren','特伦'],
-    ['ARE MCP','艾尔伊模型上下文协议'],['MCP','模型上下文协议'],['AI','人工智能']
+    ['Cloudflare','克劳德弗莱尔'],['GitHub','开源代码托管平台'],
+    ['Codex','法典编程助手'],['MCP','模型上下文协议'],['AI','人工智能']
   ];
   const escapeRE = s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   const namedRE = s=>new RegExp('(?<![a-zA-Z0-9_])'+escapeRE(s)+'(?![a-zA-Z0-9_])','gi');
