@@ -1,0 +1,15 @@
+{
+  "name": "talos-antigravity-workbench",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TALOS Antigravity 桌面工作台：无侵入轻量启动器（简体中文/英文实时切换、Google/Claude/Codex 三套主题与布局、三环额度统计、对话自动命名）",
+  "scripts": {
+    "install:mac": "bash ./scripts/install.sh",
+    "uninstall:mac": "bash ./scripts/uninstall.sh",
+    "test": "node ./tests/smoke.mjs"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,165 @@
+/* 页面结构只作用于外观模块已确认的原生侧栏。 */
+[data-aw-sidebar][data-aw-relative] {position:relative!important}
+html[data-ag-appearance=codex] [data-aw-sidebar=codex] {
+  --aw-rail:clamp(40px,3.6vw,52px);
+  box-sizing:border-box!important;padding-inline-start:var(--aw-rail)!important;
+  background:var(--aw-side)!important;color:var(--aw-ink)
+}
+[data-aw-sidebar] [data-aw-command="new"],[data-aw-sidebar] [data-aw-command="automation"],[data-aw-sidebar] [data-aw-command="custom"] {display:none!important}
+[data-aw-sidebar] [data-aw-filtered] {display:none!important}
+[data-aw-sidebar] [data-aw-focus]{outline:2px solid var(--aw-fill)!important;outline-offset:-2px}
+.aw-rail,.aw-sidebar-head,.aw-home {font-family:var(--aw-font);color:var(--aw-ink);box-sizing:border-box;-webkit-app-region:no-drag}
+.aw-rail {position:absolute;inset:0 auto 0 0;box-sizing:border-box;width:var(--aw-rail);display:flex;flex-direction:column;align-items:center;
+  gap:7px;padding:9px 3px 5px;border-right:1px solid var(--aw-line);background:var(--aw-side);z-index:2;overflow-y:auto;scrollbar-width:none}
+.aw-rail-foot {margin-top:auto;display:grid;gap:6px;padding-top:8px}
+.aw-sidebar-head {flex:0 0 auto;min-width:0;padding:6px 8px 8px;position:relative;background:var(--aw-side);z-index:1;}
+.aw-heading {display:flex;align-items:center;justify-content:space-between;padding:1px 2px 5px 7px;min-height:30px}
+.aw-heading strong {font-size:16px;line-height:24px;letter-spacing:-.025em;font-weight:620}
+.aw-act {display:flex;align-items:center;gap:9px;min-width:0;box-sizing:border-box;width:100%;text-align:left;cursor:pointer;
+  border:0;background:transparent;color:inherit;font-family:inherit;font-size:13px;font-weight:450;line-height:20px;padding:4px 7px;border-radius:6px}
+.aw-act:hover,.aw-act:focus-visible {background:var(--aw-selected)}
+.aw-act:focus-visible,.aw-filter:focus-visible {outline:2px solid var(--aw-accent);outline-offset:-2px}
+.aw-act svg {width:16px;height:16px;flex:none}
+.aw-act .aw-label {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aw-rail .aw-act,.aw-heading .aw-act {width:32px;height:32px;justify-content:center;padding:0;color:var(--aw-soft)}
+.aw-rail .aw-act[aria-current="page"] {background:var(--aw-selected);color:var(--aw-ink)}
+.aw-rail .aw-act svg {width:18px;height:18px}
+.aw-rail-foot>.aw-act:first-child svg {color:var(--aw-accent)}
+.aw-commands {display:grid;gap:2px}
+.aw-filter {box-sizing:border-box;width:100%;margin:4px 0;padding:5px 7px;font:inherit;font-size:12px;color:var(--aw-ink);
+  border:1px solid var(--aw-line);border-radius:6px;background:var(--aw-panel)}
+.aw-pinned h4 {font:500 12px/20px var(--aw-font);color:var(--aw-soft);margin:8px 7px 3px}
+.aw-filter[hidden],.aw-pinned[hidden] {display:none!important}
+html[data-ag-appearance=claude] [data-aw-sidebar=claude] {background:var(--aw-side)!important;color:var(--aw-ink)}
+html[data-ag-appearance=claude] .aw-heading {display:none}
+html[data-ag-appearance=claude] .aw-sidebar-head {padding:7px 8px 12px}
+html[data-ag-appearance=claude] .aw-commands .aw-act {font-size:14px;line-height:22px;padding:4px 9px;gap:12px;border-radius:8px}
+html[data-ag-appearance=claude] .aw-commands .aw-act:first-child {background:var(--aw-selected);font-weight:550}
+html[data-ag-appearance=claude] [data-aw-sidebar] [data-testid="project-header"] {letter-spacing:.01em;color:var(--aw-soft);font-size:12px}
+html[data-ag-appearance=claude] [data-aw-sidebar] [data-testid="conversation-row-sidebar"] {font-size:14px!important;line-height:1.45}
+html[data-ag-appearance=codex] [data-aw-sidebar] [data-testid="project-header"] {font-size:13px;font-weight:550}
+html[data-ag-appearance=claude] [data-aw-greeting] {display:none!important}
+.aw-home {width:min(322px,calc(100% - 32px));display:grid;gap:9px;margin:14px auto;align-self:center;text-align:left}
+.aw-home-card {background:var(--aw-panel);color:var(--aw-ink);border:1px solid var(--aw-line);border-radius:12px;padding:4px;overflow:hidden}
+.aw-home-card>.aw-act {font-size:13px;padding:7px 10px;min-height:33px;gap:10px}
+.aw-home-card>.aw-act>svg:last-child:not(:first-child){margin-inline-start:auto;width:12px;color:var(--aw-soft)}
+@media (max-height:620px) {.aw-home {margin:4px auto;gap:4px}.aw-home-card>.aw-act{padding:3px 7px;min-height:24px}.aw-rail{gap:3px}.aw-commands{gap:0}}
+
+/* 账号栏固定在列表滚动区域之外，弹出的选择器沿用本主题的颜色。 */
+#ag-local-theme-sidebar {display:block;padding:0;min-width:0;border-top:1px solid var(--aw-line,var(--border,#e4e5e7));color:var(--aw-ink,var(--foreground,CanvasText))}
+[data-aw-sidebar] #ag-local-theme-sidebar {position:absolute;inset:auto 0 0;z-index:4;background:var(--aw-side)}
+[data-aw-sidebar] {padding-block-end:47px!important}
+[data-aw-sidebar] [data-aw-command="settings"] {display:none!important}
+.aw-rail {inset-block-start:var(--aw-top-chrome,36px);inset-block-end:46px}
+#aw-account-control {border:0;background:transparent;color:inherit;display:flex;align-items:center;width:100%;min-height:44px;
+  text-align:start;gap:8px;padding:4px 10px;font:500 13px/1.4 -apple-system,"PingFang SC",sans-serif;cursor:pointer}
+#aw-account-control:hover,#aw-account-control[aria-expanded="true"] {background:var(--aw-selected,var(--sidebar-muted,#eee))}
+#aw-account-control:focus-visible,#aw-account-menu button:focus-visible {outline:2px solid var(--aw-accent,#4285f4);outline-offset:-2px}
+.aw-avatar {width:27px;height:27px;flex:none;display:grid;place-items:center;border-radius:50%;overflow:hidden;
+  background:var(--aw-track,#e8f0fe);color:var(--aw-accent,#245caa);font:600 13px/1 -apple-system,"PingFang SC",sans-serif}
+.aw-avatar canvas {width:100%;height:100%}
+.aw-account-name {max-width:68%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.aw-account-plan {color:var(--aw-soft,#676b70);font-size:11px}
+.aw-account-plan:not([hidden])::before {content:"· ";} .aw-account-plan[hidden]{display:none}
+.aw-account-arrow {margin-left:auto;margin-right:3px;color:var(--aw-soft,#676b70)}
+[data-aw-sidebar="codex"] #aw-account-control {padding-inline-start:calc((var(--aw-rail) - 27px)/2)}
+[data-aw-sidebar="codex"] .aw-avatar {margin-inline-end:calc((var(--aw-rail) - 27px)/2)}
+#aw-account-menu {position:fixed;inset:auto;box-sizing:border-box;z-index:2147483647;display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;width:min(158px,calc(100vw - 16px));padding:6px;
+  background:var(--aw-panel,var(--card,Canvas));color:var(--aw-ink,var(--foreground,CanvasText));
+  border:1px solid var(--aw-line,var(--border,#dadce0));border-radius:13px;
+  box-shadow:0 3px 12px #0002,0 1px 3px #0001;-webkit-app-region:no-drag}
+#aw-account-menu[hidden]{display:none!important}
+#aw-account-menu .aw-brand-choice {position:relative;display:grid;place-items:center;box-sizing:border-box;height:40px;
+  border:1px solid transparent;border-radius:8px;background:transparent;color:inherit;cursor:pointer;padding:0}
+#aw-account-menu .aw-brand-choice:hover {background:color-mix(in srgb,currentColor 7%,transparent)}
+#aw-account-menu .aw-brand-choice[aria-checked="true"] {border-color:#4285f4;background:color-mix(in srgb,#4285f4 12%,transparent)}
+#aw-account-menu [data-aw-brand] {width:23px;height:23px;display:block;pointer-events:none}
+#aw-account-menu .aw-choice-check {display:none;position:absolute;right:1px;bottom:1px;width:12px;height:12px;border-radius:50%;background:#1967d2;pointer-events:none}
+#aw-account-menu [aria-checked="true"] .aw-choice-check {display:block}
+.aw-rail-foot .aw-quota-ring {position:relative}
+.aw-rail-foot .aw-quota-ring::before {content:"";position:absolute;width:20px;height:20px;border-radius:50%;
+  background:conic-gradient(#34A853 var(--aw-remaining),var(--aw-line) 0);
+  mask:radial-gradient(farthest-side,transparent calc(100% - 2px),black calc(100% - 1.6px))}
+.aw-rail-foot .aw-quota-ring svg {display:none}
+.aw-rail-foot .aw-quota-ring::after {content:"";height:5px;width:5px;border-radius:1px;background:var(--aw-soft);transform:rotate(45deg)}
+#ag-local-theme-sidebar{display:flex;align-items:center;gap:0;padding:0}
+#aw-account-control{flex:1;min-width:0;gap:9px;padding-block:5px;min-height:45px}
+.aw-account-lines{min-width:0;display:grid;gap:1px;justify-items:start;line-height:1.2}
+.aw-account-lines .aw-account-name{max-width:100%;font-size:13px}
+.aw-account-email{display:block;max-width:100%;font-size:11px;line-height:14px;color:var(--aw-soft,var(--muted-foreground,#64676a));overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.aw-account-email[hidden]{display:none}.aw-avatar img{width:100%;height:100%;object-fit:cover}
+#ag-local-theme-sidebar>.aw-palette-button,#ag-local-theme-card-slot>.aw-palette-button {
+  display:grid;place-items:center;flex:0 0 auto;width:30px;height:30px;padding:4px;box-sizing:border-box;
+  border:1px solid transparent;border-radius:8px;background:transparent;color:var(--aw-ink,var(--foreground,CanvasText));cursor:pointer}
+#ag-local-theme-sidebar>.aw-palette-button {margin:0 6px 0 0}
+#ag-local-theme-card-slot>.aw-palette-button {width:26px;height:26px;padding:3px}
+.aw-palette-button svg {display:block;width:100%;height:100%;pointer-events:none}
+#ag-local-theme-sidebar>.aw-palette-button:is(:hover,[aria-expanded="true"]),#ag-local-theme-card-slot>.aw-palette-button:is(:hover,[aria-expanded="true"]){background:color-mix(in srgb,#4285f4 12%,transparent)}
+.aw-palette-button:focus-visible,#aw-account-menu button:focus-visible {outline:2px solid #4285f4;outline-offset:1px}
+
+/* Google 的账号行已代理原生设置操作，保留原节点的行为，同时去掉重复行。 */
+[data-aw-account-settings] {display:none!important}
+html[data-ag-appearance="codex"] {--aw-dock-width:clamp(40px,3.6vw,52px)}
+html[data-ag-appearance="codex"] [data-aw-rail-room] {
+  box-sizing:border-box!important;margin-inline-start:var(--aw-dock-width)!important;
+  width:calc(100% - var(--aw-dock-width))!important;max-width:calc(100% - var(--aw-dock-width))!important;min-width:0!important
+}
+html[data-ag-appearance="codex"] body[data-aw-rail-room-fallback] {box-sizing:border-box!important;padding-inline-start:var(--aw-dock-width)!important}
+.aw-folded-dock {position:fixed;z-index:4;left:0;top:40px;bottom:0;width:var(--aw-dock-width);box-sizing:border-box;
+  background:var(--aw-side);border-right:1px solid var(--aw-line);color:var(--aw-ink);-webkit-app-region:no-drag}
+.aw-folded-dock .aw-rail {inset:0 0 76px;width:100%;border:0}
+.aw-folded-dock #ag-local-theme-sidebar {position:absolute;left:0;right:0;bottom:0;background:var(--aw-side)}
+.aw-folded-dock #aw-account-control {justify-content:center;padding:5px 0;min-height:44px}
+.aw-folded-dock #ag-local-theme-sidebar {flex-direction:column-reverse}
+.aw-folded-dock .aw-account-lines {display:none}
+.aw-folded-dock #ag-local-theme-sidebar>.aw-palette-button {margin:1px auto}
+.aw-folded-dock #aw-account-control {width:100%}
+
+/* 首页第一张项目卡的上沿，保留参考图的 70×47 个 Retina 像素与右侧约 19 像素留白。 */
+html[data-ag-appearance="claude"] .aw-home {position:relative;overflow:visible}
+.aw-home-companion {display:none;pointer-events:none}
+html[data-ag-appearance="claude"] .aw-home>.aw-home-companion {
+  display:block;position:absolute;right:9.5px;bottom:100%;width:35px;height:23.333333px;
+  overflow:visible;user-select:none;-webkit-user-select:none;pointer-events:none
+}
+.aw-companion-body {animation:aw-companion-settle 6.4s steps(1,end) infinite}
+.aw-companion-eyes {transform-box:fill-box;transform-origin:center bottom;animation:aw-companion-blink 4.7s steps(1,end) infinite}
+.aw-companion-feet-a {animation:aw-companion-step-a 6.4s steps(1,end) infinite}
+.aw-companion-feet-b {animation:aw-companion-step-b 6.4s steps(1,end) infinite}
+@keyframes aw-companion-settle {0%,81%,100%{transform:translateY(0)}76%,79%{transform:translateY(.5px)}}
+@keyframes aw-companion-blink {0%,83%,100%{transform:scaleY(1)}80%{transform:scaleY(.24)}}
+@keyframes aw-companion-step-a {0%,74%,79%,100%{transform:translateY(0)}71%,76%{transform:translateY(-1px)}}
+@keyframes aw-companion-step-b {0%,71%,76%,81%,100%{transform:translateY(0)}74%,79%{transform:translateY(-1px)}}
+@media(prefers-reduced-motion:reduce){.aw-home-companion *{animation:none!important;transform:none!important}}
+
+/* 设置页「外观界面」卡片内注入的主题与界面语言切换行。 */
+.aw-settings-row {
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  min-height:52px;padding:10px 16px;box-sizing:border-box;
+  border-top:1px solid var(--aw-line,var(--border,color-mix(in srgb,currentColor 12%,transparent)));
+  color:var(--aw-ink,var(--foreground,inherit));font-family:var(--aw-font,inherit);
+}
+.aw-settings-label {font-size:13px;font-weight:450;line-height:1.4;color:inherit;white-space:nowrap}
+.aw-settings-pill {
+  display:inline-flex;align-items:center;gap:2px;padding:3px;border-radius:999px;
+  background:var(--aw-tray,var(--onyx-frame,color-mix(in srgb,currentColor 6%,transparent)));
+  border:1px solid var(--aw-line,var(--border,color-mix(in srgb,currentColor 12%,transparent)));
+  flex:0 0 auto;
+}
+.aw-settings-pill-btn {
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  min-width:44px;height:26px;padding:0 11px;border:0;border-radius:999px;
+  background:transparent;color:var(--aw-soft,var(--muted-foreground,inherit));
+  font:500 12px/1 var(--aw-font,-apple-system,"PingFang SC",sans-serif);
+  cursor:pointer;transition:background-color .15s ease,color .15s ease,box-shadow .15s ease;
+}
+.aw-settings-pill-btn:hover {color:var(--aw-ink,var(--foreground,inherit))}
+.aw-settings-pill-btn[aria-checked="true"] {
+  background:var(--aw-panel,var(--card,#fff));
+  color:var(--aw-accent,var(--primary,var(--aw-ink,inherit)));
+  box-shadow:0 1px 2px rgb(0 0 0 / 10%);
+}
+.aw-settings-pill-btn:focus-visible {outline:2px solid var(--aw-accent,#4285f4);outline-offset:1px}
+.aw-settings-theme-btn svg {width:14px;height:14px;flex:none;display:block;pointer-events:none}
+.aw-settings-theme-name {line-height:1;white-space:nowrap}

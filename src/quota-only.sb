@@ -1,0 +1,6 @@
+(version 1)
+; 只读额度查询不需要访问文稿或启动 MCP。登录由官方 CLI 和 macOS 自身的凭据服务处理。
+(allow default)
+(deny file-read* file-write* (subpath (param "DOCUMENTS")))
+(deny process-exec)
+(allow process-exec (literal (param "QUOTA_CLI")) (literal "/usr/bin/security"))
