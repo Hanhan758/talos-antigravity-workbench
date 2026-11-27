@@ -282,8 +282,8 @@
   }
   const views=styled('div','ag-view-switch');
   views.setAttribute('role','group'); views.setAttribute('aria-label','统计视图');
-  const overview=node('button','概览'), breakdown=node('button','明细'), quotaTab=node('button','额度');
-  const tabPairs=[[overview,'overview'],[breakdown,'usage'],[quotaTab,'quota']];
+  const overview=node('button','概览'), breakdown=node('button','明细'), quotaTab=node('button','额度'), healthTab=node('button','自检');
+  const tabPairs=[[overview,'overview'],[breakdown,'usage'],[quotaTab,'quota'],[healthTab,'health']];
   for (const [b, key] of tabPairs) {
     b.type='button'; b.dataset.agTab=key; b.setAttribute('aria-pressed',String(key===activeTab));
     b.addEventListener('click',()=>{
@@ -530,17 +530,63 @@
       miniFive(five.value,group,'#34a853',isEn),miniWeek(week.value,group,'#fbbc04',isEn)
     ].join(isEn ? ', ' : '，');
     if (button.getAttribute('aria-description') !== description) button.setAttribute('aria-description',description);
-    const ovText = isEn ? 'Overview' : '概览', brText = isEn ? 'Breakdown' : '明细', qtText = isEn ? 'Quota' : '额度';
+    const ovText = isEn ? 'Overview' : '概览', brText = isEn ? 'Breakdown' : '明细', qtText = isEn ? 'Quota' : '额度', htText = isEn ? 'Health' : '自检';
     if (overview.textContent !== ovText) overview.textContent = ovText;
     if (breakdown.textContent !== brText) breakdown.textContent = brText;
     if (quotaTab.textContent !== qtText) quotaTab.textContent = qtText;
+    if (healthTab.textContent !== htText) healthTab.textContent = htText;
     const wantTitle = isEn ? 'Usage & CLI Quota' : '用量与额度';
     if (headerTitle.textContent !== wantTitle) headerTitle.textContent = wantTitle;
     if (!open) return;
     overview.setAttribute('aria-pressed',String(activeTab==='overview'));
     breakdown.setAttribute('aria-pressed',String(activeTab==='usage'));
     quotaTab.setAttribute('aria-pressed',String(activeTab==='quota'));
+    healthTab.setAttribute('aria-pressed',String(activeTab==='health'));
     if (activeTab==='usage') { drawUsage(); return; }
+    if (activeTab==='health') {
+      details.replaceChildren();
+      const zhStatus = window.__agLocalZhStatus?.();
+      const appSnap = window.__agLocalAppearance?.snapshot?.();
+      const extras = window.__agWorkbenchExtras?.getStatus?.();
+      const checks = [
+        [isEn?'i18n Engine':'汉化引擎', typeof window.__agLocalZhStatus === 'function' ? (zhStatus?.applied || isEn ? 'ok' : 'warn') : 'err', isEn ? (window.__agLocalZhControl?.getLang?.() || 'zh') : `语言 ${window.__agLocalZhControl?.getLang?.() || 'zh'}`],
+        [isEn?'Appearance & Theme':'外观与主题', appSnap ? 'ok' : 'err', appSnap ? `${appSnap.mode} / ${appSnap.font}` : 'not mounted'],
+        [isEn?'Model Selector':'模型选择器锚点', findModel() ? 'ok' : 'warn', findModel() ? 'connected' : 'hidden'],
+        [isEn?'Session SQLite':'会话指标读取', !activeId ? 'warn' : data?.state === 'ready' ? 'ok' : 'warn', !activeId ? (isEn?'no active chat':'未打开对话') : (data?.state || 'loading')],
+        [isEn?'CLI Quota':'CLI 额度服务', quotaStatus === 'disabled' ? 'warn' : (groupRows.length ? 'ok' : 'warn'), quotaStatus],
+        [isEn?'Auto Naming':'新对话自动命名', window.__agNewChatNames ? 'ok' : 'err', window.__agNewChatNames ? 'active' : 'missing'],
+        [isEn?'Outline & Snippets':'目录与片段抽屉', extras ? 'ok' : 'err', extras ? `${extras.outlineTurns} turns · ${extras.snippetsCount} snippets` : 'missing']
+      ];
+      const box = styled('div', 'ag-usage-section');
+      box.append(styled('h4', 'ag-usage-heading', isEn ? 'Workbench Health Check' : '工作台核心锚点自检'));
+      for (const [name, st, desc] of checks) {
+        const icon = st === 'ok' ? '🟢 ' : st === 'warn' ? '🟡 ' : '🔴 ';
+        const row = styled('div', 'ag-usage-row');
+        row.append(node('span', icon + name), node('b', desc));
+        box.append(row);
+      }
+      const copyBtn = styled('button', 'ag-sync', isEn ? 'Copy Sanitized Report' : '复制脱敏诊断报告');
+      copyBtn.type = 'button';
+      copyBtn.style.marginTop = '8px';
+      copyBtn.addEventListener('click', () => {
+        const report = JSON.stringify({
+          generatedAt: new Date().toISOString(),
+          lang: window.__agLocalZhControl?.getLang?.() || 'zh',
+          theme: appSnap?.mode || null,
+          font: appSnap?.font || null,
+          width: appSnap?.width || null,
+          send: appSnap?.send || null,
+          checks: checks.map(([k, s, d]) => ({ item: k, status: s, detail: d }))
+        }, null, 2);
+        navigator.clipboard?.writeText(report).then(() => {
+          copyBtn.textContent = isEn ? 'Copied ✓' : '已复制 ✓';
+          setTimeout(() => { copyBtn.textContent = isEn ? 'Copy Sanitized Report' : '复制脱敏诊断报告'; }, 1500);
+        }).catch(() => {});
+      });
+      box.append(copyBtn);
+      details.append(box);
+      return;
+    }
     const focusKey = details.contains(document.activeElement) ? document.activeElement.dataset.agChart : '';
     const focusPicker = document.activeElement?.classList.contains('ag-select');
     const focusSync = document.activeElement?.classList.contains('ag-sync');
@@ -994,7 +1040,7 @@
   }
 
   function openTab(tab = 'overview') {
-    const target = ['overview', 'usage', 'quota'].includes(tab) ? tab : 'overview';
+    const target = ['overview', 'usage', 'quota', 'health'].includes(tab) ? tab : 'overview';
     sync();
     if (!visible(button)) return false;
     if (open && activeTab === target) { close(true); return true; }

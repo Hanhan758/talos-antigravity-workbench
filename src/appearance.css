@@ -92,6 +92,10 @@ html[data-ag-font] [id="antigravity.agentSidePanelInputBox"] [data-lexical-edito
 html[data-ag-font] :is([data-markdown-root],.prose,.markdown) :where(p,li,blockquote,h1,h2,h3,h4) {
   font-family:var(--aw-user-prose)!important;
 }
+/* 阅读栏宽度预设：专注 780px / 宽屏 1120px / 铺满。 */
+html[data-ag-width=focus] :is([data-testid="conversation-view"],[data-main-content-body]) :is([data-markdown-root],.prose,.markdown) {max-width:780px!important}
+html[data-ag-width=wide] :is([data-testid="conversation-view"],[data-main-content-body]) :is([data-markdown-root],.prose,.markdown) {max-width:1120px!important}
+html[data-ag-width=full] :is([data-testid="conversation-view"],[data-main-content-body]) :is([data-markdown-root],.prose,.markdown) {max-width:100%!important}
 /* 模型选择界面选择效果优化：在 Google / Claude / Codex 任意主题下增强悬停、选中与展开态视觉反馈。 */
 [data-testid="model-selector-trigger"] {
   transition:background-color .14s ease,border-color .14s ease,box-shadow .14s ease!important;

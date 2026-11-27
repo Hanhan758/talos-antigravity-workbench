@@ -14,14 +14,18 @@ const script = fs.readFileSync(path.join(__dirname, 'localization.js'), 'utf8').
 fs.mkdirSync(profile, { recursive: true, mode: 0o700 });
 const panelScript = fs.readFileSync(path.join(__dirname, 'panel.js'), 'utf8').trim().replace(/;$/, '');
 const quotaScript = fs.readFileSync(path.join(__dirname, 'quota.js'), 'utf8').trim();
+const extrasBaseScript = fs.readFileSync(path.join(__dirname, 'workbench-extras.js'), 'utf8').trim().replace(/;$/, '');
 const appearancePref = require('./appearance-pref.cjs');
 const displayProfile = require('./profile-display.cjs');
-const { loadI18nDict, loadCustomCss, defaultUserDir } = require('./user-overrides.cjs');
+const { loadI18nDict, loadCustomCss, loadSnippets, defaultUserDir } = require('./user-overrides.cjs');
 const { estimateCost } = require('./pricing.cjs');
+const { createStatusNotifier } = require('./notify.cjs');
+const statusNotifier = createStatusNotifier();
 const baseI18nPath = path.join(__dirname, 'i18n.json');
 let currentDictObj = loadI18nDict(baseI18nPath);
 let localizationScript = script.replace('__AG_I18N_DICT__', () => JSON.stringify(currentDictObj));
 let currentCustomCss = loadCustomCss();
+let currentSnippets = loadSnippets();
 const appearanceBaseSource = fs.readFileSync(path.join(__dirname,'appearance.js'),'utf8')
   .replace('__AG_ACCOUNT_FOOTER__',()=>fs.readFileSync(path.join(__dirname,'account-footer.js'),'utf8').trim())
   .replace('__AG_WORKSPACE_LAYOUT__',()=>fs.readFileSync(path.join(__dirname,'workspace-layout.js'),'utf8').trim())
@@ -113,7 +117,7 @@ receivePipe.on('data', chunk => {
       pending.delete(message.id);
       callback(message);
     } else if (message.method === 'Runtime.bindingCalled' && message.params?.name === '__agLocalAppearanceChanged' &&
-        (message.params.payload === 'selection' || message.params.payload === 'language' || message.params.payload === 'quota' || message.params.payload === 'font')) {
+        ['selection', 'language', 'quota', 'font', 'width', 'send', 'notify'].includes(message.params.payload)) {
       const entry = themeSessions.get(message.sessionId);
       if (entry) {
         syncAppearance(message.sessionId,entry.url)
@@ -192,6 +196,13 @@ async function refreshPanel(session, targetUrl) {
   }
   const id = info.id || null;
   const latest = id ? readMetrics(id, { history: info.open === true && (info.tab ? info.tab === 'overview' : !info.showUsage) }) : { state: 'empty' };
+  if (id && latest?.sessionStatus) {
+    statusNotifier.observe(id, latest.sessionStatus, {
+      enabled: appearancePref.getNotify() === 'on',
+      pageVisible: info.pageVisible === true,
+      lang: appearancePref.getLang()
+    });
+  }
   let usage = id && info.open && (info.tab === 'usage' || info.showUsage) && info.pageVisible ? summaryFor(id) : null;
   if (usage?.state === 'ready' && info.modelName) {
     const sessionCost = estimateCost(info.modelName, usage.session);
@@ -310,6 +321,9 @@ async function syncAppearance(session,url) {
       .replace('__AG_INITIAL_LANG__',()=>JSON.stringify(appearancePref.getLang()))
       .replace('__AG_INITIAL_QUOTA__',()=>JSON.stringify(appearancePref.getQuota()))
       .replace('__AG_INITIAL_FONT__',()=>JSON.stringify(appearancePref.getFont()))
+      .replace('__AG_INITIAL_WIDTH__',()=>JSON.stringify(appearancePref.getWidth()))
+      .replace('__AG_INITIAL_SEND__',()=>JSON.stringify(appearancePref.getSend()))
+      .replace('__AG_INITIAL_NOTIFY__',()=>JSON.stringify(appearancePref.getNotify()))
       .replace('__AG_ACCOUNT_CONTEXT__',()=>JSON.stringify(displayProfile.context()));
     return evaluate(session,url,`return (${code.trim().replace(/;$/,'')});`);
   }
@@ -336,10 +350,30 @@ async function syncAppearance(session,url) {
   const fontChoice=read.pendingFont;
   const validFontChoice=fontChoice && typeof fontChoice.id==='string' && fontChoice.id.length===36 && appearancePref.validFont(fontChoice.font);
   const fontOk=!validFontChoice || appearancePref.saveFont(fontChoice.font);
+  const widthChoice=read.pendingWidth;
+  const validWidthChoice=widthChoice && typeof widthChoice.id==='string' && widthChoice.id.length===36 && appearancePref.validWidth(widthChoice.width);
+  const widthOk=!validWidthChoice || appearancePref.saveWidth(widthChoice.width);
+  const sendChoice=read.pendingSend;
+  const validSendChoice=sendChoice && typeof sendChoice.id==='string' && sendChoice.id.length===36 && appearancePref.validSend(sendChoice.send);
+  const sendOk=!validSendChoice || appearancePref.saveSend(sendChoice.send);
+  const notifyChoice=read.pendingNotify;
+  const validNotifyChoice=notifyChoice && typeof notifyChoice.id==='string' && notifyChoice.id.length===36 && appearancePref.validNotify(notifyChoice.notify);
+  const notifyOk=!validNotifyChoice || appearancePref.saveNotify(notifyChoice.notify);
   const currentLang=appearancePref.getLang();
   const currentQuota=appearancePref.getQuota();
   const currentFont=appearancePref.getFont();
-  const args=[appearancePref.get(),validChoice ? choice.id : null,!ok,currentLang,validLangChoice ? langChoice.id : null,!langOk,currentQuota,validQuotaChoice ? quotaChoice.id : null,!quotaOk,currentFont,validFontChoice ? fontChoice.id : null,!fontOk].map(v=>JSON.stringify(v)).join(',');
+  const currentWidth=appearancePref.getWidth();
+  const currentSend=appearancePref.getSend();
+  const currentNotify=appearancePref.getNotify();
+  const args=[
+    appearancePref.get(),validChoice ? choice.id : null,!ok,
+    currentLang,validLangChoice ? langChoice.id : null,!langOk,
+    currentQuota,validQuotaChoice ? quotaChoice.id : null,!quotaOk,
+    currentFont,validFontChoice ? fontChoice.id : null,!fontOk,
+    currentWidth,validWidthChoice ? widthChoice.id : null,!widthOk,
+    currentSend,validSendChoice ? sendChoice.id : null,!sendOk,
+    currentNotify,validNotifyChoice ? notifyChoice.id : null,!notifyOk
+  ].map(v=>JSON.stringify(v)).join(',');
   return evaluate(session,url,`window.__agLocalZhControl?.setLang(${JSON.stringify(currentLang)});const theme=window.__agLocalAppearance;if(!theme)return null;theme.reconcile(${args});return theme.snapshot();`);
 }
 
@@ -358,6 +392,13 @@ async function localize(target) {
     state = await evaluate(session, target.url, `const state = (${localizationScript.replace('__AG_INITIAL_LANG__', JSON.stringify(appearancePref.getLang()))}); ${summarize}`);
   }
   const naming = await syncNewTitle(session,target.url).catch(()=>({phase:'unavailable'}));
+  const extrasReady = await evaluate(session, target.url, 'return !!window.__agWorkbenchExtras;').catch(() => true);
+  if (extrasReady === false) {
+    const extrasCode = extrasBaseScript
+      .replace('__AG_INITIAL_SNIPPETS__', () => JSON.stringify(currentSnippets))
+      .replace('__AG_INITIAL_SEND_SHORTCUT__', () => JSON.stringify(appearancePref.getSend()));
+    await evaluate(session, target.url, `return (${extrasCode});`).catch(() => {});
+  }
   const panel = await refreshPanel(session, target.url).catch(() => ({ mounted: false }));
   return { labels: state?.applied ? state.labels : [], panel, naming, appearance };
 }
@@ -401,12 +442,14 @@ function hotReloadUserOverrides() {
     currentDictObj = loadI18nDict(baseI18nPath);
     localizationScript = script.replace('__AG_I18N_DICT__', () => JSON.stringify(currentDictObj));
     currentCustomCss = loadCustomCss();
+    currentSnippets = loadSnippets();
     const dictJson = JSON.stringify(currentDictObj);
     const cssJson = JSON.stringify(currentCustomCss);
+    const snipJson = JSON.stringify(currentSnippets);
     for (const [sessionId, entry] of themeSessions) {
       if (!entry?.url) continue;
       evaluate(sessionId, entry.url,
-        `window.__agLocalZhControl?.updateDict?.(${dictJson}); window.__agLocalAppearance?.setCustomCss?.(${cssJson}); return true;`
+        `window.__agLocalZhControl?.updateDict?.(${dictJson}); window.__agLocalAppearance?.setCustomCss?.(${cssJson}); window.__agWorkbenchExtras?.setSnippets?.(${snipJson}); return true;`
       ).catch(() => {});
     }
   } catch {}
@@ -417,7 +460,7 @@ function startUserWatcher() {
     const st = fs.lstatSync(dir, { throwIfNoEntry: false });
     if (!st || !st.isDirectory() || st.isSymbolicLink()) return;
     userWatcher = fs.watch(dir, (_, filename) => {
-      if (filename && filename !== 'i18n.override.json' && filename !== 'custom.css') return;
+      if (filename && filename !== 'i18n.override.json' && filename !== 'custom.css' && filename !== 'snippets.json') return;
       if (userReloadTimer) clearTimeout(userReloadTimer);
       userReloadTimer = setTimeout(() => { userReloadTimer = null; hotReloadUserOverrides(); }, 250);
     });

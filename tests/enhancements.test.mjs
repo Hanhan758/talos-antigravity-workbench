@@ -222,3 +222,60 @@ test('turn-usage counts has_subtrajectory steps when present and supports hot-re
   assert.match(appRaw, /setCustomCss/);
   assert.match(launchRaw, /startUserWatcher/);
 });
+
+test('notify triggers background completion, waiting, and error notifications without firing on quick foreground runs', () => {
+  const { createStatusNotifier } = require(path.join(srcDir, 'notify.cjs'));
+  const sent = [];
+  const notifier = createStatusNotifier({ send: e => sent.push(e), minRunMs: 8000 });
+
+  // Quick foreground run (< 8s): no notification
+  notifier.observe('s1', { state: 'ready' }, { pageVisible: true, nowMs: 1000 });
+  notifier.observe('s1', { state: 'running' }, { pageVisible: true, nowMs: 2000 });
+  notifier.observe('s1', { state: 'ready' }, { pageVisible: true, nowMs: 5000 });
+  assert.equal(sent.length, 0);
+
+  // Background long run (>= 8s): fires completed notification
+  notifier.observe('s1', { state: 'running' }, { pageVisible: false, nowMs: 10000 });
+  notifier.observe('s1', { state: 'ready' }, { pageVisible: false, nowMs: 25000 });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].kind, 'completed');
+
+  // Waiting in background fires waiting notification
+  notifier.observe('s1', { state: 'running' }, { pageVisible: false, nowMs: 30000 });
+  notifier.observe('s1', { state: 'waiting', kind: 'slow' }, { pageVisible: false, nowMs: 95000 });
+  assert.equal(sent.length, 2);
+  assert.equal(sent[1].kind, 'waiting');
+
+  // Error fires even when visible
+  notifier.observe('s1', { state: 'error' }, { pageVisible: true, nowMs: 96000 });
+  assert.equal(sent.length, 3);
+  assert.equal(sent[2].kind, 'error');
+});
+
+test('loadSnippets returns defaults or valid user snippets and new preferences validate correctly', () => {
+  const { loadSnippets, DEFAULT_SNIPPETS } = require(path.join(srcDir, 'user-overrides.cjs'));
+  const pref = require(path.join(srcDir, 'appearance-pref.cjs'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'agw-snip-'));
+  try {
+    assert.deepEqual(loadSnippets(tmp), DEFAULT_SNIPPETS);
+    fs.writeFileSync(path.join(tmp, 'snippets.json'), JSON.stringify([
+      { title: '代码审查', text: '请帮我做安全与性能审查' },
+      { title: '', text: 'ignored' }
+    ]));
+    const loaded = loadSnippets(tmp);
+    assert.equal(loaded.length, 1);
+    assert.equal(loaded[0].title, '代码审查');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+  assert.equal(pref.validWidth('focus'), true);
+  assert.equal(pref.validWidth('huge'), false);
+  assert.equal(pref.validSend('cmd-enter'), true);
+  assert.equal(pref.validNotify('on'), true);
+
+  const extrasRaw = fs.readFileSync(path.join(srcDir, 'workbench-extras.js'), 'utf8');
+  const panelRaw = fs.readFileSync(path.join(srcDir, 'panel.js'), 'utf8');
+  assert.match(extrasRaw, /ag-outline-rail/);
+  assert.match(extrasRaw, /ag-snippet-drawer/);
+  assert.match(panelRaw, /Copy Sanitized Report/);
+});

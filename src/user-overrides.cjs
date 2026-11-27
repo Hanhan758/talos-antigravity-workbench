@@ -56,9 +56,34 @@ function loadCustomCss(userDir = defaultUserDir()) {
   return typeof raw === 'string' ? raw : '';
 }
 
+const DEFAULT_SNIPPETS = [
+  { title: '先给结论', text: '请先给核心结论与依据，再展开细节，保持简洁。' },
+  { title: '只读分析不改文件', text: '请先只读分析问题根因并给出方案，暂不修改任何文件。' },
+  { title: '补测试并全量验证', text: '请为本次改动补充单元测试，运行全量测试确认通过后再汇报。' },
+  { title: '生成变更摘要', text: '请按模块总结本次改动清单、验证情况与潜在风险。' }
+];
+
+function loadSnippets(userDir = defaultUserDir()) {
+  const raw = readSafeUserFile(path.join(userDir, 'snippets.json'), MAX_CUSTOM_CSS_BYTES);
+  if (!raw) return DEFAULT_SNIPPETS;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return DEFAULT_SNIPPETS;
+    const valid = parsed
+      .filter(item => item && typeof item.title === 'string' && item.title.trim() && typeof item.text === 'string' && item.text.trim())
+      .slice(0, 60)
+      .map(item => ({ title: item.title.trim().slice(0, 48), text: item.text.slice(0, 4000) }));
+    return valid.length ? valid : DEFAULT_SNIPPETS;
+  } catch {
+    return DEFAULT_SNIPPETS;
+  }
+}
+
 module.exports = {
   defaultUserDir,
   loadI18nOverrides,
   loadI18nDict,
-  loadCustomCss
+  loadCustomCss,
+  loadSnippets,
+  DEFAULT_SNIPPETS
 };

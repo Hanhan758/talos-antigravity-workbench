@@ -1,4 +1,4 @@
-((css, initialCustomCss, initialMode, initialLang, initialQuota, initialFont, initialAccount) => {
+((css, initialCustomCss, initialMode, initialLang, initialQuota, initialFont, initialWidth, initialSend, initialNotify, initialAccount) => {
   'use strict';
   if (window !== window.top || !document.body || location.protocol !== 'https:' || location.hostname !== '127.0.0.1' ||
       !location.port || typeof window.electronNative?.getZoomLevel !== 'function' ||
@@ -12,6 +12,9 @@
   const validLang = lang => lang==='zh' || lang==='en';
   const validQuota = v => v==='on' || v==='off';
   const validFont = v => ['default','sans','serif','mono'].includes(v);
+  const validWidth = v => ['default','focus','wide','full'].includes(v);
+  const validSend = v => v==='enter' || v==='cmd-enter';
+  const validNotify = v => v==='on' || v==='off';
   const style = document.createElement('style');
   style.id = 'ag-local-appearance-style';
   style.textContent = css;
@@ -24,7 +27,10 @@
   let currentLang = validLang(initialLang) ? initialLang : (window.__agLocalZhControl?.getLang?.() || 'zh');
   let currentQuota = validQuota(initialQuota) ? initialQuota : 'on';
   let currentFont = validFont(initialFont) ? initialFont : 'default';
-  let pending = null, saveError = false, pendingLang = null, langSaveError = false, pendingQuota = null, quotaSaveError = false, pendingFont = null, fontSaveError = false, settingAnchor = null;
+  let currentWidth = validWidth(initialWidth) ? initialWidth : 'default';
+  let currentSend = validSend(initialSend) ? initialSend : 'enter';
+  let currentNotify = validNotify(initialNotify) ? initialNotify : 'on';
+  let pending = null, saveError = false, pendingLang = null, langSaveError = false, pendingQuota = null, quotaSaveError = false, pendingFont = null, fontSaveError = false, pendingWidth = null, widthSaveError = false, pendingSend = null, sendSaveError = false, pendingNotify = null, notifySaveError = false, settingAnchor = null;
   const scheme = matchMedia('(prefers-color-scheme: dark)');
   const shown = el => el?.isConnected && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
 
@@ -54,6 +60,11 @@
       root.removeAttribute('data-ag-font');
     } else if (root.dataset.agFont!==currentFont) {
       root.dataset.agFont=currentFont;
+    }
+    if (currentWidth==='default') {
+      root.removeAttribute('data-ag-width');
+    } else if (root.dataset.agWidth!==currentWidth) {
+      root.dataset.agWidth=currentWidth;
     }
     if(saveError) account.cardToggle.title='外观偏好尚未保存';
   }
@@ -92,6 +103,32 @@
     paint();
     renderSettingsRows();
     try { window.__agLocalAppearanceChanged?.('font'); } catch {}
+  }
+  function chooseWidth(next) {
+    if(!validWidth(next) || next===currentWidth && !widthSaveError) return;
+    currentWidth=next;
+    pendingWidth={id:crypto.randomUUID(),width:next};
+    widthSaveError=false;
+    paint();
+    renderSettingsRows();
+    try { window.__agLocalAppearanceChanged?.('width'); } catch {}
+  }
+  function chooseSend(next) {
+    if(!validSend(next) || next===currentSend && !sendSaveError) return;
+    currentSend=next;
+    pendingSend={id:crypto.randomUUID(),send:next};
+    sendSaveError=false;
+    try { window.__agWorkbenchExtras?.setSendShortcut?.(next); } catch {}
+    renderSettingsRows();
+    try { window.__agLocalAppearanceChanged?.('send'); } catch {}
+  }
+  function chooseNotify(next) {
+    if(!validNotify(next) || next===currentNotify && !notifySaveError) return;
+    currentNotify=next;
+    pendingNotify={id:crypto.randomUUID(),notify:next};
+    notifySaveError=false;
+    renderSettingsRows();
+    try { window.__agLocalAppearanceChanged?.('notify'); } catch {}
   }
   const account=(__AG_ACCOUNT_FOOTER__)({choose,getMode:()=>current,getLang:()=>currentLang,getSettings:()=>layout.settingsTarget(settingAnchor),names,namesEn,initialAccount});
   const side=account.element,cardSlot=document.createElement('span');
@@ -163,6 +200,23 @@
   }
   fontRow.append(fontLabel,fontGroup);
 
+  function makePillRow(id, codes, onChoose) {
+    const row=document.createElement('div');row.id=id;row.className='aw-settings-row';row.dataset.awOwned='';
+    const label=document.createElement('span');label.className='aw-settings-label';
+    const group=document.createElement('div');group.className='aw-settings-pill';group.setAttribute('role','radiogroup');
+    const map=new Map();
+    for(const c of codes) {
+      const btn=document.createElement('button');btn.type='button';btn.className='aw-settings-pill-btn';
+      btn.setAttribute('role','radio');btn.addEventListener('click',()=>onChoose(c));
+      map.set(c,btn);group.append(btn);
+    }
+    row.append(label,group);
+    return {row,label,group,map};
+  }
+  const widthCtl=makePillRow('aw-settings-width-row',['default','focus','wide','full'],chooseWidth);
+  const sendCtl=makePillRow('aw-settings-send-row',['enter','cmd-enter'],chooseSend);
+  const notifyCtl=makePillRow('aw-settings-notify-row',['on','off'],chooseNotify);
+
   const setText=(el,val)=>{if(el.textContent!==val)el.textContent=val;};
   const setAttr=(el,k,val)=>{if(el.getAttribute(k)!==val)el.setAttribute(k,val);};
   const setTitle=(el,val)=>{if(el.title!==val)el.title=val;};
@@ -202,6 +256,17 @@
       setText(btn,zh?fNamesZh[code]:fNamesEn[code]);
       setTitle(btn,zh?('界面与对话字体：'+fNamesZh[code]):('Interface & prose font: '+fNamesEn[code]));
     }
+    const wLabel=zh?'阅读宽度':'Reading Width';
+    setText(widthCtl.label,wLabel);setAttr(widthCtl.group,'aria-label',wLabel);
+    const wZh={default:'默认',focus:'专注',wide:'宽屏',full:'铺满'}, wEn={default:'Default',focus:'Focus',wide:'Wide',full:'Full'};
+    for(const [c,btn] of widthCtl.map){setAttr(btn,'aria-checked',String(c===currentWidth));setText(btn,zh?wZh[c]:wEn[c]);}
+    const sLabel=zh?'发送快捷键':'Send Shortcut';
+    setText(sendCtl.label,sLabel);setAttr(sendCtl.group,'aria-label',sLabel);
+    const sZh={enter:'Enter','cmd-enter':'⌘+Enter'}, sEn={enter:'Enter','cmd-enter':'⌘+Enter'};
+    for(const [c,btn] of sendCtl.map){setAttr(btn,'aria-checked',String(c===currentSend));setText(btn,zh?sZh[c]:sEn[c]);setTitle(btn,c==='cmd-enter'?(zh?'Enter 换行，Cmd+Enter 发送（防误发）':'Enter for newline, Cmd+Enter to send'):(zh?'默认 Enter 发送':'Default Enter to send'));}
+    const nLabel=zh?'任务完成通知':'Task Notifications';
+    setText(notifyCtl.label,nLabel);setAttr(notifyCtl.group,'aria-label',nLabel);
+    for(const [c,btn] of notifyCtl.map){setAttr(btn,'aria-checked',String(c===currentNotify));setText(btn,c==='on'?(zh?'开启':'On'):(zh?'关闭':'Off'));}
   }
 
   function findAppearanceCard() {
@@ -234,7 +299,7 @@
 
   function mountSettingsRows() {
     renderSettingsRows();
-    if(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected) return;
+    if(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected && widthCtl.row.isConnected && sendCtl.row.isConnected && notifyCtl.row.isConnected) return;
     if(!/settings/i.test(location.pathname+location.hash) &&
        !document.querySelector('dialog[open],[role="dialog"],[aria-modal="true"],[data-testid*="settings"],[class~="group/nav-item"]')) return;
     const target=findAppearanceCard();
@@ -243,20 +308,18 @@
     const cs=getComputedStyle(nativeThemeRow);
     const padL=cs.paddingLeft, padR=cs.paddingRight;
     if(padL && padL!=='0px') {
-      themeRow.style.paddingLeft=langRow.style.paddingLeft=quotaRow.style.paddingLeft=fontRow.style.paddingLeft=padL;
-      themeRow.style.paddingRight=langRow.style.paddingRight=quotaRow.style.paddingRight=fontRow.style.paddingRight=padR||padL;
+      for(const r of [themeRow,langRow,quotaRow,fontRow,widthCtl.row,sendCtl.row,notifyCtl.row]) {
+        r.style.paddingLeft=padL; r.style.paddingRight=padR||padL;
+      }
     }
     if(themeRow.parentElement!==card || themeRow.previousElementSibling!==nativeThemeRow) {
       nativeThemeRow.insertAdjacentElement('afterend',themeRow);
     }
-    if(langRow.parentElement!==card || langRow.previousElementSibling!==lastRow) {
-      lastRow.insertAdjacentElement('afterend',langRow);
-    }
-    if(quotaRow.parentElement!==card || quotaRow.previousElementSibling!==langRow) {
-      langRow.insertAdjacentElement('afterend',quotaRow);
-    }
-    if(fontRow.parentElement!==card || fontRow.previousElementSibling!==quotaRow) {
-      quotaRow.insertAdjacentElement('afterend',fontRow);
+    const chain=[lastRow,langRow,quotaRow,fontRow,widthCtl.row,sendCtl.row,notifyCtl.row];
+    for(let i=1;i<chain.length;i++) {
+      if(chain[i].parentElement!==card || chain[i].previousElementSibling!==chain[i-1]) {
+        chain[i-1].insertAdjacentElement('afterend',chain[i]);
+      }
     }
   }
 
@@ -316,34 +379,21 @@
     if(!style.isConnected) document.head.append(style);
   }
   layout.setRefresh(mount);
-  function reconcile(mode,ack=null,failed=false,lang=null,langAck=null,langFailed=false,quota=null,quotaAck=null,quotaFailed=false,font=null,fontAck=null,fontFailed=false) {
-    if(ack && pending?.id===ack) {
-      if(failed) saveError=true;
-      else {pending=null;saveError=false;}
-    }
+  function reconcile(mode,ack=null,failed=false,lang=null,langAck=null,langFailed=false,quota=null,quotaAck=null,quotaFailed=false,font=null,fontAck=null,fontFailed=false,width=null,widthAck=null,widthFailed=false,send=null,sendAck=null,sendFailed=false,notify=null,notifyAck=null,notifyFailed=false) {
+    if(ack && pending?.id===ack) { if(failed) saveError=true; else {pending=null;saveError=false;} }
     if(!pending && valid(mode)) current=mode;
-    if(langAck && pendingLang?.id===langAck) {
-      if(langFailed) langSaveError=true;
-      else {pendingLang=null;langSaveError=false;}
-    }
-    if(!pendingLang && validLang(lang) && lang!==currentLang) {
-      currentLang=lang;
-      try { window.__agLocalZhControl?.setLang(lang); } catch {}
-    }
-    if(quotaAck && pendingQuota?.id===quotaAck) {
-      if(quotaFailed) quotaSaveError=true;
-      else {pendingQuota=null;quotaSaveError=false;}
-    }
-    if(!pendingQuota && validQuota(quota) && quota!==currentQuota) {
-      currentQuota=quota;
-    }
-    if(fontAck && pendingFont?.id===fontAck) {
-      if(fontFailed) fontSaveError=true;
-      else {pendingFont=null;fontSaveError=false;}
-    }
-    if(!pendingFont && validFont(font) && font!==currentFont) {
-      currentFont=font;
-    }
+    if(langAck && pendingLang?.id===langAck) { if(langFailed) langSaveError=true; else {pendingLang=null;langSaveError=false;} }
+    if(!pendingLang && validLang(lang) && lang!==currentLang) { currentLang=lang; try { window.__agLocalZhControl?.setLang(lang); } catch {} }
+    if(quotaAck && pendingQuota?.id===quotaAck) { if(quotaFailed) quotaSaveError=true; else {pendingQuota=null;quotaSaveError=false;} }
+    if(!pendingQuota && validQuota(quota) && quota!==currentQuota) currentQuota=quota;
+    if(fontAck && pendingFont?.id===fontAck) { if(fontFailed) fontSaveError=true; else {pendingFont=null;fontSaveError=false;} }
+    if(!pendingFont && validFont(font) && font!==currentFont) currentFont=font;
+    if(widthAck && pendingWidth?.id===widthAck) { if(widthFailed) widthSaveError=true; else {pendingWidth=null;widthSaveError=false;} }
+    if(!pendingWidth && validWidth(width) && width!==currentWidth) currentWidth=width;
+    if(sendAck && pendingSend?.id===sendAck) { if(sendFailed) sendSaveError=true; else {pendingSend=null;sendSaveError=false;} }
+    if(!pendingSend && validSend(send) && send!==currentSend) { currentSend=send; try { window.__agWorkbenchExtras?.setSendShortcut?.(send); } catch {} }
+    if(notifyAck && pendingNotify?.id===notifyAck) { if(notifyFailed) notifySaveError=true; else {pendingNotify=null;notifySaveError=false;} }
+    if(!pendingNotify && validNotify(notify) && notify!==currentNotify) currentNotify=notify;
     paint(); mount();
   }
   function snapshot() {
@@ -352,7 +402,7 @@
     const composer=document.querySelector('[id="antigravity.agentSidePanelInputBox"]');
     const selector=composer?.querySelector('[data-testid="model-selector-trigger"]');
     const paragraph=[...document.querySelectorAll('[data-markdown-root] p,.prose p,.markdown p')].find(shown);
-    return {mode:current,lang:currentLang,quota:currentQuota,font:currentFont,tone:tone(), pending, pendingLang, pendingQuota, pendingFont, structure:layout.status(), settingsRowHidden:!!settingAnchor?.isConnected && !shown(settingAnchor), settingsInjected:!!(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected), account:account.info(), sidebar:!!shown(side), cardEntry:!!cardSlot.isConnected,
+    return {mode:current,lang:currentLang,quota:currentQuota,font:currentFont,width:currentWidth,send:currentSend,notify:currentNotify,tone:tone(), pending, pendingLang, pendingQuota, pendingFont, pendingWidth, pendingSend, pendingNotify, structure:layout.status(), settingsRowHidden:!!settingAnchor?.isConnected && !shown(settingAnchor), settingsInjected:!!(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected && widthCtl.row.isConnected && sendCtl.row.isConnected && notifyCtl.row.isConnected), account:account.info(), sidebar:!!shown(side), cardEntry:!!cardSlot.isConnected,
       pageColor:styles.getPropertyValue('--background').trim().slice(0,64),
       sidebarColor:styles.getPropertyValue('--sidebar').trim().slice(0,64),
       composerColor:composer?getComputedStyle(composer).backgroundColor:null,
@@ -364,7 +414,7 @@
   }
   let settingsMountTimer=null;
   const settingsObserver=new MutationObserver(mutations=>{
-    if(settingsMountTimer || (themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected)) return;
+    if(settingsMountTimer || (themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected && widthCtl.row.isConnected && sendCtl.row.isConnected && notifyCtl.row.isConnected)) return;
     const external=mutations.some(m=>!(m.target instanceof Element && m.target.closest?.('[data-aw-owned]')));
     if(!external) return;
     settingsMountTimer=setTimeout(()=>{settingsMountTimer=null;mountSettingsRows();},140);
@@ -381,4 +431,4 @@
   }
   window.__agLocalAppearance=Object.freeze({reconcile,snapshot,takeProfile:account.take,acceptProfile:account.cache,setCustomCss});
   paint(); mount(); return snapshot();
-})(__AG_APPEARANCE_CSS__,__AG_CUSTOM_CSS__,__AG_INITIAL_APPEARANCE__,__AG_INITIAL_LANG__,__AG_INITIAL_QUOTA__,__AG_INITIAL_FONT__,__AG_ACCOUNT_CONTEXT__)
+})(__AG_APPEARANCE_CSS__,__AG_CUSTOM_CSS__,__AG_INITIAL_APPEARANCE__,__AG_INITIAL_LANG__,__AG_INITIAL_QUOTA__,__AG_INITIAL_FONT__,__AG_INITIAL_WIDTH__,__AG_INITIAL_SEND__,__AG_INITIAL_NOTIFY__,__AG_ACCOUNT_CONTEXT__)

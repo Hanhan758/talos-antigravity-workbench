@@ -5,10 +5,16 @@ const key='WorkspaceAppearance';
 const langKey='InterfaceLanguage';
 const quotaKey='QuotaEnabled';
 const fontKey='InterfaceFont';
+const widthKey='ReadingWidth';
+const sendKey='SendShortcut';
+const notifyKey='NotifyEnabled';
 const valid=mode=>['google','claude','codex'].includes(mode);
 const validLang=lang=>['zh','en'].includes(lang);
 const validQuota=v=>['on','off'].includes(v);
 const validFont=v=>['default','sans','serif','mono'].includes(v);
+const validWidth=v=>['default','focus','wide','full'].includes(v);
+const validSend=v=>['enter','cmd-enter'].includes(v);
+const validNotify=v=>['on','off'].includes(v);
 
 const saved=spawnSync('/usr/bin/defaults',['read',domain,key],{encoding:'utf8',timeout:1200,stdio:['ignore','pipe','ignore']});
 let mode=(saved.stdout||'').trim();
@@ -25,6 +31,18 @@ if(!validQuota(quota)) quota='on';
 const savedFont=spawnSync('/usr/bin/defaults',['read',domain,fontKey],{encoding:'utf8',timeout:1200,stdio:['ignore','pipe','ignore']});
 let font=(savedFont.stdout||'').trim();
 if(!validFont(font)) font='default';
+
+const savedWidth=spawnSync('/usr/bin/defaults',['read',domain,widthKey],{encoding:'utf8',timeout:1200,stdio:['ignore','pipe','ignore']});
+let width=(savedWidth.stdout||'').trim();
+if(!validWidth(width)) width='default';
+
+const savedSend=spawnSync('/usr/bin/defaults',['read',domain,sendKey],{encoding:'utf8',timeout:1200,stdio:['ignore','pipe','ignore']});
+let sendShortcut=(savedSend.stdout||'').trim();
+if(!validSend(sendShortcut)) sendShortcut='enter';
+
+const savedNotify=spawnSync('/usr/bin/defaults',['read',domain,notifyKey],{encoding:'utf8',timeout:1200,stdio:['ignore','pipe','ignore']});
+let notify=(savedNotify.stdout||'').trim();
+if(!validNotify(notify)) notify='on';
 
 function save(next) {
   if(!valid(next)) return false;
@@ -54,4 +72,33 @@ function saveFont(next) {
   if(result.status!==0) return false;
   font=next; return true;
 }
-module.exports={get:()=>mode,save,getLang:()=>lang,saveLang,getQuota:()=>quota,saveQuota,getFont:()=>font,saveFont,validFont};
+function saveWidth(next) {
+  if(!validWidth(next)) return false;
+  if(next===width) return true;
+  const result=spawnSync('/usr/bin/defaults',['write',domain,widthKey,'-string',next],{timeout:1500,stdio:'ignore'});
+  if(result.status!==0) return false;
+  width=next; return true;
+}
+function saveSend(next) {
+  if(!validSend(next)) return false;
+  if(next===sendShortcut) return true;
+  const result=spawnSync('/usr/bin/defaults',['write',domain,sendKey,'-string',next],{timeout:1500,stdio:'ignore'});
+  if(result.status!==0) return false;
+  sendShortcut=next; return true;
+}
+function saveNotify(next) {
+  if(!validNotify(next)) return false;
+  if(next===notify) return true;
+  const result=spawnSync('/usr/bin/defaults',['write',domain,notifyKey,'-string',next],{timeout:1500,stdio:'ignore'});
+  if(result.status!==0) return false;
+  notify=next; return true;
+}
+module.exports={
+  get:()=>mode,save,
+  getLang:()=>lang,saveLang,
+  getQuota:()=>quota,saveQuota,
+  getFont:()=>font,saveFont,validFont,
+  getWidth:()=>width,saveWidth,validWidth,
+  getSend:()=>sendShortcut,saveSend,validSend,
+  getNotify:()=>notify,saveNotify,validNotify
+};
