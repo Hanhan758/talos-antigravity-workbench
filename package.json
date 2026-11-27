@@ -6,7 +6,7 @@
   "scripts": {
     "install:mac": "bash ./scripts/install.sh",
     "uninstall:mac": "bash ./scripts/uninstall.sh",
-    "test": "node ./tests/smoke.mjs"
+    "test": "node ./tests/smoke.mjs && node --test ./tests/enhancements.test.mjs"
   },
   "engines": {
     "node": ">=22.13.0"

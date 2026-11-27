@@ -89,13 +89,13 @@ html[data-ag-appearance=claude] [data-aw-greeting] {display:none!important}
 .aw-account-lines .aw-account-name{max-width:100%;font-size:13px}
 .aw-account-email{display:block;max-width:100%;font-size:11px;line-height:14px;color:var(--aw-soft,var(--muted-foreground,#64676a));overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .aw-account-email[hidden]{display:none}.aw-avatar img{width:100%;height:100%;object-fit:cover}
-#ag-local-theme-sidebar>.aw-palette-button,#ag-local-theme-card-slot>.aw-palette-button {
+#ag-local-theme-sidebar .aw-palette-button,#ag-local-theme-card-slot>.aw-palette-button {
   display:grid;place-items:center;flex:0 0 auto;width:30px;height:30px;padding:4px;box-sizing:border-box;
   border:1px solid transparent;border-radius:8px;background:transparent;color:var(--aw-ink,var(--foreground,CanvasText));cursor:pointer}
-#ag-local-theme-sidebar>.aw-palette-button {margin:0 6px 0 0}
+#ag-local-theme-sidebar .aw-palette-button {margin:0 6px 0 0}
 #ag-local-theme-card-slot>.aw-palette-button {width:26px;height:26px;padding:3px}
 .aw-palette-button svg {display:block;width:100%;height:100%;pointer-events:none}
-#ag-local-theme-sidebar>.aw-palette-button:is(:hover,[aria-expanded="true"]),#ag-local-theme-card-slot>.aw-palette-button:is(:hover,[aria-expanded="true"]){background:color-mix(in srgb,#4285f4 12%,transparent)}
+#ag-local-theme-sidebar .aw-palette-button:is(:hover,[aria-expanded="true"]),#ag-local-theme-card-slot>.aw-palette-button:is(:hover,[aria-expanded="true"]){background:color-mix(in srgb,#4285f4 12%,transparent)}
 .aw-palette-button:focus-visible,#aw-account-menu button:focus-visible {outline:2px solid #4285f4;outline-offset:1px}
 
 /* Google 的账号行已代理原生设置操作，保留原节点的行为，同时去掉重复行。 */
@@ -109,11 +109,10 @@ html[data-ag-appearance="codex"] body[data-aw-rail-room-fallback] {box-sizing:bo
 .aw-folded-dock {position:fixed;z-index:4;left:0;top:40px;bottom:0;width:var(--aw-dock-width);box-sizing:border-box;
   background:var(--aw-side);border-right:1px solid var(--aw-line);color:var(--aw-ink);-webkit-app-region:no-drag}
 .aw-folded-dock .aw-rail {inset:0 0 76px;width:100%;border:0}
-.aw-folded-dock #ag-local-theme-sidebar {position:absolute;left:0;right:0;bottom:0;background:var(--aw-side)}
+.aw-folded-dock #ag-local-theme-sidebar {position:absolute;left:0;right:0;bottom:0;background:var(--aw-side);flex-direction:column-reverse}
 .aw-folded-dock #aw-account-control {justify-content:center;padding:5px 0;min-height:44px}
-.aw-folded-dock #ag-local-theme-sidebar {flex-direction:column-reverse}
 .aw-folded-dock .aw-account-lines {display:none}
-.aw-folded-dock #ag-local-theme-sidebar>.aw-palette-button {margin:1px auto}
+.aw-folded-dock #ag-local-theme-sidebar .aw-palette-button {margin:1px auto}
 .aw-folded-dock #aw-account-control {width:100%}
 
 /* 首页第一张项目卡的上沿，保留参考图的 70×47 个 Retina 像素与右侧约 19 像素留白。 */

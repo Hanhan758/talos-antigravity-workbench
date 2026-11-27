@@ -125,6 +125,71 @@ function sourceFor(uuid) {
   return {id, dbPath, signature};
 }
 
+function isCancelText(raw) {
+  const s = typeof raw === 'string'
+    ? raw
+    : Buffer.isBuffer(raw) || raw instanceof Uint8Array
+    ? Buffer.from(raw.subarray(0, 256)).toString('utf8')
+    : '';
+  return /\b(?:cancel(?:led|ed)?|abort(?:ed)?|interrupt(?:ed)?|stopped\s+by\s+user)\b/i.test(s);
+}
+
+function extractStepStartMs(metadataBytes) {
+  if (!(metadataBytes instanceof Uint8Array) || metadataBytes.length === 0) return null;
+  try {
+    const top = fields(metadataBytes, [1]);
+    const ts = top.get(1);
+    if (!(ts instanceof Uint8Array)) return null;
+    const sec = fields(ts, [1]).get(1);
+    if (Number.isSafeInteger(sec) && sec > 1_500_000_000 && sec < 4_000_000_000) {
+      return sec * 1000;
+    }
+  } catch {}
+  return null;
+}
+
+function deriveSessionStatus({ activeSteps = [], latestNonUserStep = null, nowMs = Date.now() } = {}) {
+  const active = Array.isArray(activeSteps) ? activeSteps : [];
+  if (active.length > 0) {
+    const compacting = active.some(s => Number(s?.step_type) === 23);
+    let newestStart = null;
+    for (const step of active) {
+      const ms = Number.isFinite(step?.startMs) ? step.startMs : extractStepStartMs(step?.metadata);
+      if (ms !== null && (newestStart === null || ms > newestStart)) newestStart = ms;
+    }
+    const elapsedSec = newestStart !== null ? Math.max(0, Math.floor((nowMs - newestStart) / 1000)) : 0;
+    if (elapsedSec >= 60) {
+      return { state: 'waiting', kind: compacting ? 'compacting' : 'slow', elapsedSec };
+    }
+    return { state: 'running', kind: compacting ? 'compacting' : 'active', elapsedSec };
+  }
+  if (latestNonUserStep) {
+    const st = Number(latestNonUserStep.status);
+    const tp = Number(latestNonUserStep.step_type);
+    const errRaw = latestNonUserStep.error_details;
+    const hasErr = errRaw !== null && errRaw !== undefined &&
+      (typeof errRaw === 'string' ? errRaw.trim().length > 0 : errRaw.length > 0);
+    if ((tp === 17 || st === 4 || hasErr) && !isCancelText(errRaw)) {
+      return { state: 'error', kind: 'step_error', elapsedSec: 0 };
+    }
+  }
+  return { state: 'ready', kind: 'idle', elapsedSec: 0 };
+}
+
+function readSessionStatus(db, nowMs = Date.now()) {
+  try {
+    const activeSteps = db.prepare(
+      'SELECT idx, step_type, status, metadata FROM steps WHERE status IN (1, 2, 8, 9, 11) ORDER BY idx DESC LIMIT 5'
+    ).all();
+    const latestNonUserStep = db.prepare(
+      'SELECT idx, step_type, status, error_details FROM steps WHERE step_type != 14 ORDER BY idx DESC LIMIT 1'
+    ).get() || null;
+    return deriveSessionStatus({ activeSteps, latestNonUserStep, nowMs });
+  } catch {
+    return { state: 'ready', kind: 'idle', elapsedSec: 0 };
+  }
+}
+
 function readMetrics(uuid, { history = false } = {}) {
   let db;
   try {
@@ -132,13 +197,16 @@ function readMetrics(uuid, { history = false } = {}) {
     if (source.state) return source;
     const {id, dbPath, signature} = source;
     const old = cache.get(id);
-    if (old?.signature === signature && Date.now() - old.at < 15000 && (!history || old.detail)) {
+    const liveState = old?.latest?.sessionStatus?.state;
+    const cacheTtl = liveState === 'running' || liveState === 'waiting' ? 2000 : 15000;
+    if (old?.signature === signature && Date.now() - old.at < cacheTtl && (!history || old.detail)) {
       return history ? old.detail : old.latest;
     }
 
     db = new DatabaseSync(dbPath, { readOnly: true, timeout: 80 });
     // 让长度、记录序号与实际字节来自同一读快照；连接在 finally 中关闭并释放快照。
     db.exec('PRAGMA query_only = ON; BEGIN');
+    const sessionStatus = readSessionStatus(db);
     const recent = db.prepare('SELECT idx,length(data) AS bytes FROM gen_metadata ORDER BY idx DESC LIMIT ?').all(maxRows + 1);
     const byIndex = db.prepare('SELECT data FROM gen_metadata WHERE idx = ? AND length(data) <= ?');
     const samples = [];
@@ -167,6 +235,7 @@ function readMetrics(uuid, { history = false } = {}) {
     }
     if (recent.length > maxRows && (history ? samples.length < maxHistory : !latest)) partial = true;
     latest ??= { state: partial ? 'unavailable' : 'empty' };
+    latest = { ...latest, sessionStatus };
     const detail = history ? { ...latest, history: samples.reverse(), historyPartial: partial } : null;
     const value = history ? detail : latest;
     cache.delete(id);
@@ -180,4 +249,4 @@ function readMetrics(uuid, { history = false } = {}) {
   }
 }
 
-module.exports = { readMetrics, sourceFor, decode };
+module.exports = { readMetrics, sourceFor, decode, deriveSessionStatus, isCancelText, extractStepStartMs };

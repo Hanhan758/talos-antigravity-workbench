@@ -19,8 +19,12 @@ for (const file of fs.readdirSync(srcDir)) {
   }
 }
 
+const i18nDict = JSON.parse(fs.readFileSync(path.join(srcDir, 'i18n.json'), 'utf8'));
+assert.ok(Object.keys(i18nDict).length >= 1800, 'i18n.json should contain full dictionary');
 const locCode = fs.readFileSync(path.join(srcDir, 'localization.js'), 'utf8')
-  .trim().replace(/;$/, '').replace('__AG_INITIAL_LANG__', JSON.stringify('zh'));
+  .trim().replace(/;$/, '')
+  .replace('__AG_I18N_DICT__', () => JSON.stringify(i18nDict))
+  .replace('__AG_INITIAL_LANG__', JSON.stringify('zh'));
 new vm.Script(`(${locCode})`, { filename: 'localization.js' });
 
 const appCode = fs.readFileSync(path.join(srcDir, 'appearance.js'), 'utf8')
@@ -146,11 +150,17 @@ if (process.platform === 'darwin' && fs.existsSync('/Applications/Antigravity.ap
     const cdHashBefore = readCdHash(testApp);
     const mtimeBefore = fs.statSync(path.join(testApp, 'Contents/MacOS/AntigravityWorkbench')).mtimeMs;
 
-    // Two consecutive runtime updates must both preserve .launcher.sha256 and keep CDHash/mtime unchanged
+    // Two consecutive runtime updates must preserve .launcher.sha256, user/ overrides, and keep CDHash/mtime unchanged
+    const testUserDir = path.join(testRuntimeBase, 'user');
+    fs.mkdirSync(testUserDir, { recursive: true });
+    fs.writeFileSync(path.join(testUserDir, 'i18n.override.json'), '{"Settings":"偏好设置"}\n');
+    fs.writeFileSync(path.join(testUserDir, 'custom.css'), ':root { --ag-user-test: 1; }\n');
     for (let i = 0; i < 2; i++) {
       execFileSync('bash', [installSh, '--dest', testApp, '--runtime', testRuntime, '--name', 'Antigravity Workbench Test'], { stdio: 'pipe' });
       assert.equal(fs.statSync(path.join(testApp, 'Contents/MacOS/AntigravityWorkbench')).mtimeMs, mtimeBefore);
       assert.equal(readCdHash(testApp), cdHashBefore);
+      assert.equal(fs.readFileSync(path.join(testUserDir, 'i18n.override.json'), 'utf8'), '{"Settings":"偏好设置"}\n');
+      assert.equal(fs.readFileSync(path.join(testUserDir, 'custom.css'), 'utf8'), ':root { --ag-user-test: 1; }\n');
     }
 
     // Pre-swap failure (invalid signing identity during stage 2)
@@ -208,7 +218,9 @@ if (process.platform === 'darwin' && fs.existsSync('/Applications/Antigravity.ap
 
     execFileSync('bash', [uninstallSh, '--dest', testApp, '--runtime', testRuntimeBase], { stdio: 'pipe' });
     assert.equal(fs.existsSync(testApp), false);
-    assert.equal(fs.existsSync(testRuntimeBase), false);
+    assert.equal(fs.existsSync(testRuntime), false, 'Managed runtime subdir must be removed on uninstall');
+    assert.ok(fs.existsSync(path.join(testUserDir, 'i18n.override.json')), 'User i18n overrides must be preserved on uninstall');
+    assert.ok(fs.existsSync(path.join(testUserDir, 'custom.css')), 'User custom.css must be preserved on uninstall');
     console.log(`ALL_SMOKE_TESTS_PASSED (macOS CDHash verified: ${cdHashBefore.slice(0, 12)}..., rolledBackOldAppLaunched: ${rolledBackLaunched})`);
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });

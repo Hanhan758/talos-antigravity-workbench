@@ -16,10 +16,18 @@ const panelScript = fs.readFileSync(path.join(__dirname, 'panel.js'), 'utf8').tr
 const quotaScript = fs.readFileSync(path.join(__dirname, 'quota.js'), 'utf8').trim();
 const appearancePref = require('./appearance-pref.cjs');
 const displayProfile = require('./profile-display.cjs');
-const appearanceSource = fs.readFileSync(path.join(__dirname,'appearance.js'),'utf8')
+const { loadI18nDict, loadCustomCss, defaultUserDir } = require('./user-overrides.cjs');
+const { estimateCost } = require('./pricing.cjs');
+const baseI18nPath = path.join(__dirname, 'i18n.json');
+let currentDictObj = loadI18nDict(baseI18nPath);
+let localizationScript = script.replace('__AG_I18N_DICT__', () => JSON.stringify(currentDictObj));
+let currentCustomCss = loadCustomCss();
+const appearanceBaseSource = fs.readFileSync(path.join(__dirname,'appearance.js'),'utf8')
   .replace('__AG_ACCOUNT_FOOTER__',()=>fs.readFileSync(path.join(__dirname,'account-footer.js'),'utf8').trim())
   .replace('__AG_WORKSPACE_LAYOUT__',()=>fs.readFileSync(path.join(__dirname,'workspace-layout.js'),'utf8').trim())
-  .replace('__AG_APPEARANCE_CSS__',()=>JSON.stringify(['appearance.css','workspace-layout.css'].map(name=>fs.readFileSync(path.join(__dirname,name),'utf8')).join('\n')));
+  .replace('__AG_APPEARANCE_CSS__',()=>JSON.stringify(
+    ['appearance.css','workspace-layout.css'].map(name=>fs.readFileSync(path.join(__dirname,name),'utf8')).join('\n')
+  ));
 const themeSessions = new Map();
 const { summaryFor } = require('./turn-usage.cjs');
 const { readMetrics } = require('./metrics.cjs');
@@ -105,17 +113,23 @@ receivePipe.on('data', chunk => {
       pending.delete(message.id);
       callback(message);
     } else if (message.method === 'Runtime.bindingCalled' && message.params?.name === '__agLocalAppearanceChanged' &&
-        (message.params.payload === 'selection' || message.params.payload === 'language' || message.params.payload === 'quota')) {
+        (message.params.payload === 'selection' || message.params.payload === 'language' || message.params.payload === 'quota' || message.params.payload === 'font')) {
       const entry = themeSessions.get(message.sessionId);
       if (entry) {
         syncAppearance(message.sessionId,entry.url)
           .then(() => {
-            if (message.params.payload === 'quota') {
-              if (appearancePref.getQuota() !== 'on') quotaReader.invalidate();
+            if (message.params.payload === 'quota' || message.params.payload === 'language') {
+              if (message.params.payload === 'quota' && appearancePref.getQuota() !== 'on') quotaReader.invalidate();
               return refreshPanel(message.sessionId, entry.url);
             }
           })
           .catch(()=>{});
+      }
+    } else if ((message.method === 'Target.targetCreated' || message.method === 'Target.targetInfoChanged') &&
+        message.params?.targetInfo?.type === 'page' && allowedPage(message.params.targetInfo.url)) {
+      const info = message.params.targetInfo;
+      if (!sessions.has(info.targetId)) {
+        setTimeout(() => { if (!finished) localize(info).catch(() => {}); }, 120);
       }
     } else if (message.method === 'Target.detachedFromTarget') {
       themeSessions.delete(message.params.sessionId);
@@ -177,12 +191,26 @@ async function refreshPanel(session, targetUrl) {
     }
   }
   const id = info.id || null;
-  const latest = id ? readMetrics(id) : { state: 'empty' };
-  const data = id && info.open && info.showUsage && info.pageVisible ? {...latest, usage:summaryFor(id)} : latest;
+  const latest = id ? readMetrics(id, { history: info.open === true && (info.tab ? info.tab === 'overview' : !info.showUsage) }) : { state: 'empty' };
+  let usage = id && info.open && (info.tab === 'usage' || info.showUsage) && info.pageVisible ? summaryFor(id) : null;
+  if (usage?.state === 'ready' && info.modelName) {
+    const sessionCost = estimateCost(info.modelName, usage.session);
+    const turnCost = usage.turns?.[0]?.calls ? estimateCost(info.modelName, usage.turns[0]) : null;
+    usage = { ...usage, cost: { session: sessionCost, turn: turnCost } };
+  }
+  const data = usage ? { ...latest, usage } : latest;
+  const secondaryMap = {};
+  if (Array.isArray(info.secondaryIds)) {
+    for (const subId of info.secondaryIds.slice(0, 4)) {
+      if (typeof subId === 'string' && subId !== id) {
+        secondaryMap[subId] = readMetrics(subId);
+      }
+    }
+  }
   const result = await evaluate(session, targetUrl,
     `const panel = window.__agContextPanel;
      if (!panel || panel.get().id !== ${JSON.stringify(id)}) return null;
-     panel.update(${JSON.stringify(id)}, ${JSON.stringify(data)});
+     panel.update(${JSON.stringify(id)}, ${JSON.stringify(data)}, ${JSON.stringify(secondaryMap)});
      const current = panel.get();
      const observedQuotas = window.__agQuotaSummary?.get()?.items ?? [];
      const button = document.getElementById('ag-local-context-trigger');
@@ -276,9 +304,12 @@ async function syncAppearance(session,url) {
   entry.url=url;
   const read=await evaluate(session,url,"return window.__agLocalAppearance?.snapshot() ?? 'mount';");
   if (read==='mount') {
-    const code=appearanceSource.replace('__AG_INITIAL_APPEARANCE__',()=>JSON.stringify(appearancePref.get()))
+    const code=appearanceBaseSource
+      .replace('__AG_CUSTOM_CSS__',()=>JSON.stringify(currentCustomCss))
+      .replace('__AG_INITIAL_APPEARANCE__',()=>JSON.stringify(appearancePref.get()))
       .replace('__AG_INITIAL_LANG__',()=>JSON.stringify(appearancePref.getLang()))
       .replace('__AG_INITIAL_QUOTA__',()=>JSON.stringify(appearancePref.getQuota()))
+      .replace('__AG_INITIAL_FONT__',()=>JSON.stringify(appearancePref.getFont()))
       .replace('__AG_ACCOUNT_CONTEXT__',()=>JSON.stringify(displayProfile.context()));
     return evaluate(session,url,`return (${code.trim().replace(/;$/,'')});`);
   }
@@ -302,9 +333,13 @@ async function syncAppearance(session,url) {
   const quotaChoice=read.pendingQuota;
   const validQuotaChoice=quotaChoice && typeof quotaChoice.id==='string' && quotaChoice.id.length===36 && ['on','off'].includes(quotaChoice.quota);
   const quotaOk=!validQuotaChoice || appearancePref.saveQuota(quotaChoice.quota);
+  const fontChoice=read.pendingFont;
+  const validFontChoice=fontChoice && typeof fontChoice.id==='string' && fontChoice.id.length===36 && appearancePref.validFont(fontChoice.font);
+  const fontOk=!validFontChoice || appearancePref.saveFont(fontChoice.font);
   const currentLang=appearancePref.getLang();
   const currentQuota=appearancePref.getQuota();
-  const args=[appearancePref.get(),validChoice ? choice.id : null,!ok,currentLang,validLangChoice ? langChoice.id : null,!langOk,currentQuota,validQuotaChoice ? quotaChoice.id : null,!quotaOk].map(v=>JSON.stringify(v)).join(',');
+  const currentFont=appearancePref.getFont();
+  const args=[appearancePref.get(),validChoice ? choice.id : null,!ok,currentLang,validLangChoice ? langChoice.id : null,!langOk,currentQuota,validQuotaChoice ? quotaChoice.id : null,!quotaOk,currentFont,validFontChoice ? fontChoice.id : null,!fontOk].map(v=>JSON.stringify(v)).join(',');
   return evaluate(session,url,`window.__agLocalZhControl?.setLang(${JSON.stringify(currentLang)});const theme=window.__agLocalAppearance;if(!theme)return null;theme.reconcile(${args});return theme.snapshot();`);
 }
 
@@ -320,16 +355,20 @@ async function localize(target) {
   let state = await evaluate(session, target.url,
     `if (typeof window.__agLocalZhStatus !== 'function') return 'mount'; window.__agLocalZhControl?.setLang(${JSON.stringify(appearancePref.getLang())}); const state = window.__agLocalZhStatus(); ${summarize}`);
   if (state === 'mount') {
-    state = await evaluate(session, target.url, `const state = (${script.replace('__AG_INITIAL_LANG__', JSON.stringify(appearancePref.getLang()))}); ${summarize}`);
+    state = await evaluate(session, target.url, `const state = (${localizationScript.replace('__AG_INITIAL_LANG__', JSON.stringify(appearancePref.getLang()))}); ${summarize}`);
   }
   const naming = await syncNewTitle(session,target.url).catch(()=>({phase:'unavailable'}));
   const panel = await refreshPanel(session, target.url).catch(() => ({ mounted: false }));
   return { labels: state?.applied ? state.labels : [], panel, naming, appearance };
 }
 
+let targetDiscoveryEnabled = false;
 async function check() {
   if (finished) return;
   try {
+    if (!targetDiscoveryEnabled) {
+      await request('Target.setDiscoverTargets', { discover: true }).then(() => { targetDiscoveryEnabled = true; }).catch(() => {});
+    }
     const { targetInfos } = await request('Target.getTargets');
     const pages = targetInfos.filter(t => t.type === 'page' && allowedPage(t.url));
     const current = new Set(pages.map(t => t.targetId));
@@ -354,9 +393,43 @@ async function check() {
   }
 }
 
+let userWatcher = null;
+let userReloadTimer = null;
+function hotReloadUserOverrides() {
+  if (finished) return;
+  try {
+    currentDictObj = loadI18nDict(baseI18nPath);
+    localizationScript = script.replace('__AG_I18N_DICT__', () => JSON.stringify(currentDictObj));
+    currentCustomCss = loadCustomCss();
+    const dictJson = JSON.stringify(currentDictObj);
+    const cssJson = JSON.stringify(currentCustomCss);
+    for (const [sessionId, entry] of themeSessions) {
+      if (!entry?.url) continue;
+      evaluate(sessionId, entry.url,
+        `window.__agLocalZhControl?.updateDict?.(${dictJson}); window.__agLocalAppearance?.setCustomCss?.(${cssJson}); return true;`
+      ).catch(() => {});
+    }
+  } catch {}
+}
+function startUserWatcher() {
+  const dir = defaultUserDir(__dirname);
+  try {
+    const st = fs.lstatSync(dir, { throwIfNoEntry: false });
+    if (!st || !st.isDirectory() || st.isSymbolicLink()) return;
+    userWatcher = fs.watch(dir, (_, filename) => {
+      if (filename && filename !== 'i18n.override.json' && filename !== 'custom.css') return;
+      if (userReloadTimer) clearTimeout(userReloadTimer);
+      userReloadTimer = setTimeout(() => { userReloadTimer = null; hotReloadUserOverrides(); }, 250);
+    });
+    userWatcher.on('error', () => {});
+  } catch {}
+}
+
 function finish(phase) {
   if (finished) return;
   finished = true;
+  if (userReloadTimer) { clearTimeout(userReloadTimer); userReloadTimer = null; }
+  if (userWatcher) { try { userWatcher.close(); } catch {} userWatcher = null; }
   quotaReader.close();
   for (const callback of pending.values()) callback({ error: true });
   pending.clear();
@@ -369,4 +442,5 @@ for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
   process.on(sig, () => { finish('terminated'); process.exit(0); });
 }
 writeStatus('starting');
+startUserWatcher();
 check();

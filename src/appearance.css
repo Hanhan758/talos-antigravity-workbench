@@ -72,3 +72,46 @@ html[data-ag-appearance] #ag-local-context-trigger {color:var(--aw-ink);font-fam
 /* 选择器与应用自身的主题菜单分开；保留原生焦点和键盘操作。 */
 #ag-local-theme-card-slot {display:inline-flex;align-items:center;margin-inline-start:auto;margin-inline-end:7px}
 #ag-local-theme-sidebar {display:flex;align-items:center;justify-content:space-between;gap:5px;min-width:0;padding:3px 8px;font:500 12px/1.4 -apple-system,"PingFang SC",sans-serif;color:var(--aw-soft,var(--muted-foreground,inherit))}
+/* 本机阅读字体预设：不依赖外部字体包，在 Google / Claude / Codex 任意主题下均可用。 */
+html[data-ag-font=sans] {
+  --aw-user-font:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Hiragino Sans GB",sans-serif;
+  --aw-user-prose:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Hiragino Sans GB",sans-serif;
+}
+html[data-ag-font=serif] {
+  --aw-user-font:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+  --aw-user-prose:Georgia,"New York",Cambria,"Songti SC","STSong",serif;
+}
+html[data-ag-font=mono] {
+  --aw-user-font:"SF Mono","JetBrains Mono","Menlo","PingFang SC",monospace;
+  --aw-user-prose:"SF Mono","JetBrains Mono","Menlo","PingFang SC",monospace;
+}
+html[data-ag-font] body,
+html[data-ag-font] [id="antigravity.agentSidePanelInputBox"] [data-lexical-editor="true"] {
+  font-family:var(--aw-user-font)!important;
+}
+html[data-ag-font] :is([data-markdown-root],.prose,.markdown) :where(p,li,blockquote,h1,h2,h3,h4) {
+  font-family:var(--aw-user-prose)!important;
+}
+/* 模型选择界面选择效果优化：在 Google / Claude / Codex 任意主题下增强悬停、选中与展开态视觉反馈。 */
+[data-testid="model-selector-trigger"] {
+  transition:background-color .14s ease,border-color .14s ease,box-shadow .14s ease!important;
+}
+[data-testid="model-selector-trigger"]:hover {
+  background-color:color-mix(in srgb,var(--aw-accent,#4285f4) 8%,var(--aw-tray,transparent))!important;
+}
+[data-testid="model-selector-trigger"][aria-expanded="true"] {
+  background-color:color-mix(in srgb,var(--aw-accent,#4285f4) 12%,var(--aw-tray,transparent))!important;
+  box-shadow:0 0 0 1.5px color-mix(in srgb,var(--aw-accent,#4285f4) 48%,transparent)!important;
+}
+:is([role="listbox"],[role="menu"],[data-radix-popper-content-wrapper]) :is([role="option"],[role="menuitem"],[role="menuitemradio"]) {
+  transition:background-color .12s ease,box-shadow .12s ease,transform .12s ease!important;
+  border-radius:var(--aw-row-radius,7px)!important;
+}
+:is([role="listbox"],[role="menu"],[data-radix-popper-content-wrapper]) :is([role="option"],[role="menuitem"],[role="menuitemradio"]):is(:hover,[data-highlighted=""],[data-highlighted="true"]) {
+  background-color:color-mix(in srgb,var(--aw-accent,#4285f4) 10%,transparent)!important;
+}
+:is([role="listbox"],[role="menu"],[data-radix-popper-content-wrapper]) :is([role="option"],[role="menuitem"],[role="menuitemradio"]):is([aria-selected="true"],[aria-checked="true"],[data-state="checked"],[data-selected="true"]) {
+  background-color:color-mix(in srgb,var(--aw-accent,#4285f4) 14%,transparent)!important;
+  box-shadow:inset 3px 0 0 var(--aw-accent,#4285f4)!important;
+  font-weight:550!important;
+}

@@ -42,6 +42,29 @@
       background:color-mix(in srgb,currentColor 6%,transparent)
     }
     #ag-local-context-trigger .ag-mini {display:inline-flex;align-items:center;gap:3px}
+    #ag-local-context-trigger .ag-status-dot {
+      width:6px;height:6px;border-radius:50%;flex:none;margin-right:1px;
+      background:#4285f4;opacity:.92;transition:background .2s ease
+    }
+    #ag-local-context-trigger .ag-status-dot[data-status="running"] {
+      background:#4285f4;animation:ag-dot-pulse 1.4s ease-in-out infinite
+    }
+    #ag-local-context-trigger .ag-status-dot[data-status="waiting"] {
+      background:#f9ab00;animation:ag-dot-pulse 2.2s ease-in-out infinite
+    }
+    #ag-local-context-trigger .ag-status-dot[data-status="error"] {
+      background:#ea4335;animation:ag-dot-pulse 1.1s ease-in-out infinite
+    }
+    @keyframes ag-dot-pulse {0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.82)}}
+    #ag-local-context-card .ag-head-left {display:inline-flex;align-items:center;gap:6px;min-width:0}
+    #ag-local-context-card .ag-status-pill {
+      display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:999px;
+      font-size:10px;font-weight:550;line-height:16px;white-space:nowrap;
+      background:color-mix(in srgb,var(--ag-status-c,#4285f4) 13%,transparent);color:var(--ag-status-c,#4285f4)
+    }
+    #ag-local-context-card .ag-status-pill::before {
+      content:"";width:5px;height:5px;border-radius:50%;background:currentColor;flex:none
+    }
     #ag-local-context-trigger .ag-mini-dial {
       display:grid;place-items:center;position:relative;width:26px;height:26px;flex:none;
       font:600 8px/1 Roboto,"Helvetica Neue",Arial,sans-serif;letter-spacing:-.35px;font-variant-numeric:tabular-nums
@@ -87,6 +110,45 @@
     #ag-local-context-card .ag-close:focus-visible,#ag-local-context-trigger:focus-visible {outline:2px solid #4285f4;outline-offset:2px}
     #ag-local-context-card .ag-major,#ag-local-context-card .ag-minor {display:grid;gap:4px;align-items:stretch}
     #ag-local-context-card .ag-major {grid-template-columns:repeat(3,minmax(0,1fr));margin-top:7px}
+    #ag-local-context-card .ag-major.ag-major-quota {grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    #ag-local-context-card .ag-hero {display:flex;align-items:center;gap:12px;margin-top:7px;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--ag-fill) 9%,var(--ag-surface))}
+    #ag-local-context-card .ag-hero .ag-reading {padding:0;background:transparent!important;flex:none}
+    #ag-local-context-card .ag-hero-meta {display:grid;gap:2px;min-width:0;flex:1;font-size:11px;color:var(--ag-muted)}
+    #ag-local-context-card .ag-hero-meta b {color:var(--ag-fg);font-weight:600}
+    #ag-local-context-card .ag-qstyle-bar {display:flex;align-items:center;justify-content:space-between;gap:6px;margin:5px 0 7px}
+    #ag-local-context-card .ag-qpool-tag {display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--ag-fg);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #ag-local-context-card .ag-qpool-dot {width:6px;height:6px;border-radius:50%;background:linear-gradient(135deg,#10b981,#3b82f6);flex:none}
+    #ag-local-context-card .ag-qstyle-pills {display:inline-flex;gap:2px;padding:2px;border-radius:8px;background:color-mix(in srgb,var(--ag-fg) 6%,transparent);flex:none}
+    #ag-local-context-card .ag-qstyle-pills button {border:0;background:transparent;color:var(--ag-muted);border-radius:6px;padding:2px 6px;font:500 10px/15px inherit;cursor:pointer;transition:background-color .14s ease,color .14s ease}
+    #ag-local-context-card .ag-qstyle-pills button[aria-pressed="true"] {background:var(--ag-surface);color:var(--ag-fg);box-shadow:0 1px 2px #0002}
+    #ag-local-context-card .ag-qstack {display:grid;gap:7px}
+    #ag-local-context-card .ag-qgrid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+    #ag-local-context-card .ag-qcard {
+      font:inherit;color:var(--ag-fg);text-align:left;cursor:pointer;box-sizing:border-box;width:100%;
+      border:1px solid color-mix(in srgb,var(--q-c) 24%,var(--ag-line));border-radius:11px;padding:8px 10px;
+      background:color-mix(in srgb,var(--q-c) 7%,var(--ag-surface));transition:background-color .15s ease,border-color .15s ease
+    }
+    #ag-local-context-card .ag-qcard:hover,#ag-local-context-card .ag-qcard[aria-pressed="true"] {
+      border-color:color-mix(in srgb,var(--q-c) 52%,var(--ag-line));
+      background:color-mix(in srgb,var(--q-c) 11%,var(--ag-surface))
+    }
+    #ag-local-context-card .ag-qrow-head {display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:6px}
+    #ag-local-context-card .ag-qrow-left {display:inline-flex;align-items:baseline;gap:6px}
+    #ag-local-context-card .ag-qbadge {font-size:10px;font-weight:600;padding:1px 5px;border-radius:5px;background:color-mix(in srgb,var(--q-c) 16%,transparent);color:var(--q-c)}
+    #ag-local-context-card .ag-qpct {font-size:14px;font-weight:700;letter-spacing:-.2px;color:var(--ag-fg)}
+    #ag-local-context-card .ag-qsub {font-size:10px;color:var(--ag-muted);white-space:nowrap}
+    #ag-local-context-card .ag-qsegs {display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+    #ag-local-context-card .ag-qseg {height:6px;border-radius:3px;background:color-mix(in srgb,var(--ag-fg) 10%,transparent);overflow:hidden}
+    #ag-local-context-card .ag-qseg-fill {height:100%;border-radius:3px;background:linear-gradient(90deg,var(--q-c),var(--q-c2))}
+    #ag-local-context-card .ag-qdots {display:grid;grid-template-columns:repeat(20,1fr);gap:3px;align-items:center}
+    #ag-local-context-card .ag-qdot {aspect-ratio:1;border-radius:50%;background:color-mix(in srgb,var(--ag-fg) 11%,transparent)}
+    #ag-local-context-card .ag-qdot.on {background:linear-gradient(135deg,var(--q-c),var(--q-c2));box-shadow:0 0 4px color-mix(in srgb,var(--q-c) 45%,transparent)}
+    #ag-local-context-card .ag-qring-card {display:flex;align-items:center;gap:8px;padding:9px 8px}
+    #ag-local-context-card .ag-qring {width:36px;height:36px;border-radius:50%;flex:none;display:grid;place-items:center;background:conic-gradient(var(--q-c) var(--turn),color-mix(in srgb,var(--ag-fg) 12%,transparent) 0)}
+    #ag-local-context-card .ag-qring span {width:26px;height:26px;border-radius:50%;background:var(--ag-surface)}
+    #ag-local-context-card .ag-qring-meta {display:grid;gap:1px;min-width:0}
+    #ag-local-context-card .ag-qgauge-card {display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;padding:8px 6px}
+    #ag-local-context-card .ag-qgauge-svg {width:72px;height:40px;display:block;overflow:visible}
     #ag-local-context-card .ag-minor {grid-template-columns:repeat(3,minmax(0,1fr));margin-top:8px;padding-top:8px;border-top:1px solid var(--ag-line);row-gap:8px}
     #ag-local-context-card .ag-reading {font:inherit;color:var(--ag-fg);display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;
       border:0;border-radius:8px;background:transparent;padding:2px;min-width:0;cursor:pointer}
@@ -122,7 +184,21 @@
     #ag-local-context-card .ag-usage-table th {font-weight:500;color:var(--ag-muted)}
     #ag-local-context-card .ag-usage-table :is(th,td):first-child {text-align:left}
     @media (max-width:280px) {#ag-local-context-card .ag-minor {grid-template-columns:repeat(2,minmax(0,1fr))}}
+    #ag-local-context-card .ag-trend {margin-top:8px;padding-top:7px;border-top:1px solid var(--ag-line)}
+    #ag-local-context-card .ag-trend-head {display:flex;align-items:center;justify-content:space-between;font-size:10.5px;color:var(--ag-muted);margin-bottom:4px}
+    #ag-local-context-card .ag-trend-head b {color:var(--ag-fg);font-weight:550}
+    #ag-local-context-card .ag-spark {display:block;width:100%;height:30px;overflow:visible}
     #ag-local-context-card .ag-empty {margin:7px 0 2px;color:var(--ag-muted)}
+    .ag-pane-badge {
+      display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:999px;
+      font:500 10px/14px Roboto,"Helvetica Neue","PingFang SC",sans-serif;font-variant-numeric:tabular-nums;
+      color:inherit;background:color-mix(in srgb,currentColor 7%,transparent);
+      position:absolute;top:6px;right:10px;z-index:20;pointer-events:auto;user-select:none
+    }
+    .ag-pane-badge .ag-pane-dot {width:5px;height:5px;border-radius:50%;background:#4285f4;flex:none}
+    .ag-pane-badge .ag-pane-dot[data-status="running"] {background:#4285f4;animation:ag-dot-pulse 1.4s ease-in-out infinite}
+    .ag-pane-badge .ag-pane-dot[data-status="waiting"] {background:#f9ab00;animation:ag-dot-pulse 2.2s ease-in-out infinite}
+    .ag-pane-badge .ag-pane-dot[data-status="error"] {background:#ea4335;animation:ag-dot-pulse 1.1s ease-in-out infinite}
   `;
   document.head.append(style);
   const button = node('button');
@@ -133,7 +209,7 @@
   button.setAttribute('aria-controls','ag-local-context-card');
   button.setAttribute('aria-expanded','false');
   button.setAttribute('aria-haspopup','dialog');
-  function miniDial(key,caption,kind,color) {
+  function miniDial(key,caption,kind,color,captionEn,kindEn,shortEn) {
     const mini = node('span');
     mini.className = 'ag-mini';
     mini.dataset.summaryRing = key;
@@ -142,26 +218,39 @@
     value.className = 'ag-mini-dial';
     const label = node('span');
     label.className = 'ag-mini-label';
-    label.dataset.short = {capacity:'上下文',five:'5h',week:'周'}[key];
-    label.append(node('span',caption),node('small',kind));
+    const shortZh = {capacity:'上下文',five:'5h',week:'周'}[key];
+    label.dataset.short = shortZh;
+    const capEl = node('span',caption), kindEl = node('small',kind);
+    label.append(capEl,kindEl);
     mini.append(value,label);
     button.append(mini);
-    return (percent,group='',overrideColor=color) => {
+    return (percent,group='',overrideColor=color,isEn=false) => {
       const shown = num(percent) ? Number(percent.toFixed(1))+'%' : '—';
       if (value.textContent !== shown) {
         value.textContent = shown;
         mini.style.setProperty('--ag-mini-sweep', num(percent) ? Math.min(100,percent)+'%' : '0%');
       }
+      const wantCap = isEn ? captionEn : caption;
+      const wantKind = isEn ? kindEn : kind;
+      const wantShort = isEn ? shortEn : shortZh;
+      if (capEl.textContent !== wantCap) capEl.textContent = wantCap;
+      if (kindEl.textContent !== wantKind) kindEl.textContent = wantKind;
+      if (label.dataset.short !== wantShort) label.dataset.short = wantShort;
       if (key==='capacity') mini.toggleAttribute('data-aw-warning',num(percent) && percent>=75);
       if (mini.style.getPropertyValue('--ag-mini-color') !== overrideColor) mini.style.setProperty('--ag-mini-color',overrideColor);
-      const help=(group ? group+' · ' : '')+caption+kind+' '+shown;
+      const help=(group ? group+' · ' : '')+wantCap+(isEn?' ':'')+wantKind+' '+shown;
       if (mini.title !== help) mini.title = help;
       return help;
     };
   }
-  const miniContext = miniDial('capacity','上下文','占用','#4285f4');
-  const miniFive = miniDial('five','5小时','剩余','#34a853');
-  const miniWeek = miniDial('week','每周','剩余','#fbbc04');
+  const statusDot = node('span');
+  statusDot.className = 'ag-status-dot';
+  statusDot.dataset.status = 'ready';
+  statusDot.setAttribute('aria-hidden', 'true');
+  button.append(statusDot);
+  const miniContext = miniDial('capacity','上下文','占用','#4285f4','Context','Used','Ctx');
+  const miniFive = miniDial('five','5小时','剩余','#34a853','5h','Left','5h');
+  const miniWeek = miniDial('week','每周','剩余','#fbbc04','Week','Left','Wk');
   const card = node('section');
   card.id = 'ag-local-context-card';
   card.tabIndex = -1;
@@ -169,22 +258,36 @@
   card.setAttribute('aria-label','上下文统计');
   card.hidden = true;
   const top = node('header');
+  const headLeft = styled('div','ag-head-left');
   const closeButton = node('button','×');
   closeButton.type = 'button';
   closeButton.setAttribute('aria-label','关闭统计面板');
   closeButton.className = 'ag-close';
   const headerTitle = node('strong','用量与额度');
-  top.append(headerTitle,closeButton);
+  const statusPill = styled('span','ag-status-pill','就绪');
+  headLeft.append(headerTitle,statusPill);
+  top.append(headLeft,closeButton);
   const details = node('div');
   details.className = 'ag-body';
-  let showUsage=false;
+  let activeTab='overview';
+  let quotaStyle = (() => {
+    try { const v = localStorage.getItem('ag-local-quota-style'); return ['segments','rings','gauge','dots'].includes(v) ? v : 'segments'; }
+    catch { return 'segments'; }
+  })();
+  function setQuotaStyle(next) {
+    if (!['segments','rings','gauge','dots'].includes(next) || next === quotaStyle) return;
+    quotaStyle = next;
+    try { localStorage.setItem('ag-local-quota-style', next); } catch {}
+    draw(); position();
+  }
   const views=styled('div','ag-view-switch');
   views.setAttribute('role','group'); views.setAttribute('aria-label','统计视图');
-  const overview=node('button','实时概览'), breakdown=node('button','用量明细');
-  for (const b of [overview,breakdown]) {
-    b.type='button'; b.setAttribute('aria-pressed',String(b===overview));
+  const overview=node('button','概览'), breakdown=node('button','明细'), quotaTab=node('button','额度');
+  const tabPairs=[[overview,'overview'],[breakdown,'usage'],[quotaTab,'quota']];
+  for (const [b, key] of tabPairs) {
+    b.type='button'; b.dataset.agTab=key; b.setAttribute('aria-pressed',String(key===activeTab));
     b.addEventListener('click',()=>{
-      showUsage=b===breakdown; explainedKey='';
+      activeTab=key; explainedKey='';
       draw(); position();
     });
     views.append(b);
@@ -332,13 +435,30 @@
       line(box,'缓存读取占比',cachePct(g),'缓存读取量合计除以含缓存输入量合计。≥ 表示部分调用缺少缓存数据，当前值为下限。');
       if (g.timed) line(box,'调用耗时合计',(g.timed<g.calls?'≥':'')+g.duration.toFixed(1)+' s',
         '合计已记录的首字等待和流式耗时。工具运行、调用之间的等待另计。');
+      if (g.streamOut > 0 && g.streamSec > 0) line(box,'平均生成速度',(g.streamOut/g.streamSec).toFixed(1)+' tok/s',
+        '已记录流式输出总量除以流式生成总时长。');
     }
+    const fmtUsd = v => !Number.isFinite(v) ? '—' : v < 0.001 ? '<$0.001' : '$' + v.toFixed(v >= 1 ? 2 : 3);
     const current=usage.turns[0];
     const round=section(current?'本轮 · 第 '+current.number+' 轮':'本轮');
-    if (current?.calls) summary(round,current);
+    if (current?.calls) {
+      summary(round,current);
+      if (usage.cost?.turn) {
+        line(round,'等效 API 费用（参考）',fmtUsd(usage.cost.turn.totalUsd) + (usage.cost.turn.savedUsd > 0 ? '（缓存省 ' + fmtUsd(usage.cost.turn.savedUsd) + '）' : ''),
+          '按本地静态参考单价估算，仅作相对消耗参考，非真实账单。');
+      }
+    }
     else round.append(note('本轮尚无可归属的模型调用。'));
     const session=section((usage.partial?'已读取记录小计':'会话累计')+' · '+fmt(usage.turnCount)+' 轮');
     summary(session,usage.session);
+    if (usage.cost?.session) {
+      line(session,'等效 API 费用（参考）',fmtUsd(usage.cost.session.totalUsd) + (usage.cost.session.savedUsd > 0 ? '（缓存省 ' + fmtUsd(usage.cost.session.savedUsd) + '）' : ''),
+        '按本地静态参考单价估算，仅作相对消耗参考，非真实账单。');
+    }
+    if (usage.subagentSteps > 0) {
+      line(session,'子代理 / Swarm 派发',fmt(usage.subagentSteps)+' 次',
+        '当前会话中触发子轨迹（Subagent / Swarm）的步骤次数。');
+    }
     if (usage.partial || usage.unmapped) {
       const msgs=[];
       if (usage.partial) msgs.push('部分记录超出读取范围或无法解析，合计仅含已读取记录。');
@@ -363,8 +483,32 @@
     }
   }
 
+  function formatSessionStatus(raw, isEn) {
+    const st = raw?.state || 'ready';
+    const kind = raw?.kind || 'idle';
+    const sec = Number.isFinite(raw?.elapsedSec) && raw.elapsedSec > 0 ? raw.elapsedSec : 0;
+    if (st === 'error') {
+      return { state: 'error', color: '#ea4335', label: isEn ? 'Error' : '执行异常' };
+    }
+    if (st === 'waiting') {
+      const waitTxt = sec ? (isEn ? `Waiting ${sec}s` : `等待响应 ${sec}s`) : (isEn ? 'Waiting' : '等待响应');
+      return { state: 'waiting', color: '#f9ab00', label: kind === 'compacting' ? (isEn ? `Compacting ${sec}s` : `压缩中 ${sec}s`) : waitTxt };
+    }
+    if (st === 'running') {
+      return { state: 'running', color: '#4285f4', label: kind === 'compacting' ? (isEn ? 'Compacting' : '压缩上下文中') : (isEn ? 'Running' : '执行中') };
+    }
+    return { state: 'ready', color: '#4285f4', label: isEn ? 'Ready' : '就绪' };
+  }
+
   function draw() {
     const ready = data?.state === 'ready';
+    const isEn = window.__agLocalZhControl?.getLang?.() === 'en';
+    const sess = formatSessionStatus(activeId ? data?.sessionStatus : null, isEn);
+    if (statusDot.dataset.status !== sess.state) statusDot.dataset.status = sess.state;
+    const dotTitle = (isEn ? 'Session: ' : '会话状态：') + sess.label;
+    if (statusDot.title !== dotTitle) statusDot.title = dotTitle;
+    if (statusPill.textContent !== sess.label) statusPill.textContent = sess.label;
+    if (statusPill.style.getPropertyValue('--ag-status-c') !== sess.color) statusPill.style.setProperty('--ag-status-c', sess.color);
     const used = ready ? portion(data.context,data.limit) : null;
     const color = num(used) && used >= 90 ? '#ea4335' : num(used) && used >= 75 ? '#f9ab00' : 'var(--ag-fill)';
     refreshQuota();
@@ -382,62 +526,192 @@
     };
     const five = quotaFor('five'), week = quotaFor('week');
     const description = [
-      miniContext(used,'',color === 'var(--ag-fill)' ? '#4285f4' : color),
-      miniFive(five.value,group),miniWeek(week.value,group)
-    ].join('，');
+      miniContext(used,'',color === 'var(--ag-fill)' ? '#4285f4' : color,isEn),
+      miniFive(five.value,group,'#34a853',isEn),miniWeek(week.value,group,'#fbbc04',isEn)
+    ].join(isEn ? ', ' : '，');
     if (button.getAttribute('aria-description') !== description) button.setAttribute('aria-description',description);
+    const ovText = isEn ? 'Overview' : '概览', brText = isEn ? 'Breakdown' : '明细', qtText = isEn ? 'Quota' : '额度';
+    if (overview.textContent !== ovText) overview.textContent = ovText;
+    if (breakdown.textContent !== brText) breakdown.textContent = brText;
+    if (quotaTab.textContent !== qtText) quotaTab.textContent = qtText;
+    const wantTitle = isEn ? 'Usage & CLI Quota' : '用量与额度';
+    if (headerTitle.textContent !== wantTitle) headerTitle.textContent = wantTitle;
     if (!open) return;
-    overview.setAttribute('aria-pressed',String(!showUsage));
-    breakdown.setAttribute('aria-pressed',String(showUsage));
-    if (showUsage) { drawUsage(); return; }
+    overview.setAttribute('aria-pressed',String(activeTab==='overview'));
+    breakdown.setAttribute('aria-pressed',String(activeTab==='usage'));
+    quotaTab.setAttribute('aria-pressed',String(activeTab==='quota'));
+    if (activeTab==='usage') { drawUsage(); return; }
     const focusKey = details.contains(document.activeElement) ? document.activeElement.dataset.agChart : '';
     const focusPicker = document.activeElement?.classList.contains('ag-select');
     const focusSync = document.activeElement?.classList.contains('ag-sync');
     details.replaceChildren();
-    const major = styled('div','ag-major');
+    function quotaPalette(period, value) {
+      if (num(value) && value <= 10) return ['#ef4444', '#f87171'];
+      if (num(value) && value <= 25) return ['#f59e0b', '#fbbf24'];
+      return period === 'five' ? ['#10b981', '#34d399'] : ['#3b82f6', '#38bdf8'];
+    }
+    function quotaMeta(period, name, reading) {
+      const { value, resetAt } = reading;
+      const rw = window.__agQuotaSummary?.get?.()?.runway;
+      const rwH = period === 'five' ? rw?.fiveHours : rw?.weekHours;
+      const rwTxt = Number.isFinite(rwH) ? (isEn ? `~${rwH}h left at current pace. ` : `按当前速率约可用 ${rwH} 小时。`) : '';
+      const hint = group ? (isEn ? `${group} ${name} quota. ` : `${group}的${name}额度。`) : (groups.length ? (isEn ? 'Select a quota group. ' : '选择额度模型组。') : (isEn ? 'Waiting for quota. ' : '等待后台读取额度。'));
+      const explanation = hint + (num(value) ? (isEn ? `Remaining ${Number(value.toFixed(1))}%. ` : `上次读取的剩余额度为 ${Number(value.toFixed(1))}%。`) : (isEn ? 'No confirmed percentage yet. ' : '尚无可确认的剩余百分比。'))
+        + rwTxt + (resetAt ? (isEn ? `Resets ${readTime(resetAt)}.` : `下次重置时间（本地）${readTime(resetAt)}。`) : '');
+      const sub = Number.isFinite(rwH) ? (isEn ? `~${rwH}h left` : `约可用 ${rwH}h`) : resetCountdown(resetAt, now);
+      const pctNum = num(value) ? Math.max(0, Math.min(100, value)) : 0;
+      const pctTxt = num(value) ? Number(value.toFixed(1)) + '%' : '—';
+      const [c1, c2] = quotaPalette(period, value);
+      return { key: 'quota-' + period, tag: period === 'five' ? '5h' : (isEn ? '7d' : '周'), name, pctNum, pctTxt, hasVal: num(value), sub, explanation, c1, c2 };
+    }
+    function buildQuotaCard(meta) {
+      const cardBtn = styled('button', 'ag-qcard');
+      cardBtn.type = 'button';
+      cardBtn.dataset.agChart = meta.key;
+      cardBtn.title = meta.explanation;
+      cardBtn.setAttribute('aria-pressed', String(explainedKey === meta.key));
+      cardBtn.style.setProperty('--q-c', meta.c1);
+      cardBtn.style.setProperty('--q-c2', meta.c2);
+      if (quotaStyle === 'segments' || quotaStyle === 'dots') {
+        const head = styled('div', 'ag-qrow-head');
+        const left = styled('span', 'ag-qrow-left');
+        left.append(styled('span', 'ag-qbadge', meta.tag), styled('span', 'ag-qpct', meta.pctTxt));
+        head.append(left, styled('span', 'ag-qsub', meta.sub));
+        cardBtn.append(head);
+        if (quotaStyle === 'segments') {
+          const segs = styled('div', 'ag-qsegs');
+          for (let i = 0; i < 5; i++) {
+            const seg = styled('span', 'ag-qseg');
+            const fillPct = meta.hasVal ? Math.max(0, Math.min(100, (meta.pctNum - i * 20) * 5)) : 0;
+            const fill = styled('div', 'ag-qseg-fill');
+            fill.style.width = fillPct + '%';
+            seg.append(fill);
+            segs.append(seg);
+          }
+          cardBtn.append(segs);
+        } else {
+          const dots = styled('div', 'ag-qdots');
+          const lit = meta.hasVal ? Math.round(meta.pctNum / 5) : 0;
+          for (let i = 0; i < 20; i++) {
+            dots.append(styled('span', i < lit ? 'ag-qdot on' : 'ag-qdot'));
+          }
+          cardBtn.append(dots);
+        }
+      } else if (quotaStyle === 'rings') {
+        cardBtn.classList.add('ag-qring-card');
+        const ring = styled('span', 'ag-qring');
+        ring.style.setProperty('--turn', (meta.hasVal ? meta.pctNum : 0) + '%');
+        ring.append(node('span'));
+        const info = styled('span', 'ag-qring-meta');
+        const topRow = styled('span', 'ag-qrow-left');
+        topRow.append(styled('span', 'ag-qbadge', meta.tag), styled('span', 'ag-qpct', meta.pctTxt));
+        info.append(topRow, styled('span', 'ag-qsub', meta.sub));
+        cardBtn.append(ring, info);
+      } else {
+        cardBtn.classList.add('ag-qgauge-card');
+        const svgNs = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNs, 'svg');
+        svg.setAttribute('class', 'ag-qgauge-svg');
+        svg.setAttribute('viewBox', '0 0 72 40');
+        svg.setAttribute('aria-hidden', 'true');
+        const bg = document.createElementNS(svgNs, 'path');
+        bg.setAttribute('d', 'M 8 36 A 28 28 0 0 1 64 36');
+        bg.setAttribute('fill', 'none');
+        bg.setAttribute('stroke', 'currentColor');
+        bg.setAttribute('stroke-opacity', '0.14');
+        bg.setAttribute('stroke-width', '5');
+        bg.setAttribute('stroke-linecap', 'round');
+        const fg = document.createElementNS(svgNs, 'path');
+        fg.setAttribute('d', 'M 8 36 A 28 28 0 0 1 64 36');
+        fg.setAttribute('fill', 'none');
+        fg.setAttribute('stroke', meta.c1);
+        fg.setAttribute('stroke-width', '5');
+        fg.setAttribute('stroke-linecap', 'round');
+        const arcLen = Math.PI * 28;
+        const dash = meta.hasVal ? (arcLen * meta.pctNum) / 100 : 0;
+        fg.setAttribute('stroke-dasharray', `${dash.toFixed(1)} ${arcLen.toFixed(1)}`);
+        svg.append(bg, fg);
+        const topRow = styled('span', 'ag-qrow-left');
+        topRow.append(styled('span', 'ag-qbadge', meta.tag), styled('span', 'ag-qpct', meta.pctTxt));
+        cardBtn.append(svg, topRow, styled('span', 'ag-qsub', meta.sub));
+      }
+      return cardBtn;
+    }
+    if (activeTab==='quota') {
+      const styleBar = styled('div', 'ag-qstyle-bar');
+      const poolTag = styled('span', 'ag-qpool-tag');
+      poolTag.append(styled('span', 'ag-qpool-dot'), node('span', group || (isEn ? 'CLI Quota Pool' : 'CLI 额度池')));
+      const pills = styled('div', 'ag-qstyle-pills');
+      pills.setAttribute('role', 'group');
+      pills.setAttribute('aria-label', isEn ? 'Quota style' : '额度图形样式');
+      const styleDefs = isEn
+        ? [['segments','Seg'],['rings','Ring'],['gauge','Gauge'],['dots','Dots']]
+        : [['segments','分段'],['rings','双环'],['gauge','仪表'],['dots','点阵']];
+      for (const [key, label] of styleDefs) {
+        const b = node('button', label);
+        b.type = 'button';
+        b.dataset.agQstyle = key;
+        b.setAttribute('aria-pressed', String(quotaStyle === key));
+        pills.append(b);
+      }
+      styleBar.append(poolTag, pills);
+      details.append(styleBar);
+
+      const m5 = quotaMeta('five', isEn ? '5h' : '5 小时', five);
+      const m7 = quotaMeta('week', isEn ? 'Weekly' : '每周', week);
+      const box = styled('div', (quotaStyle === 'rings' || quotaStyle === 'gauge') ? 'ag-qgrid' : 'ag-qstack');
+      box.append(buildQuotaCard(m5), buildQuotaCard(m7));
+      details.append(box);
+      const quotaInfo = styled('div','ag-quota-info');
+      if (groups.length>1) {
+        const chooser = styled('select','ag-select');
+        chooser.setAttribute('aria-label','选择额度模型组');
+        const placeholder = node('option',selected ? '当前模型组 · '+selected : '选择额度模型组');
+        placeholder.value='';chooser.append(placeholder);
+        for (const name of groups) {
+          const opt=node('option',name);opt.value=name;chooser.append(opt);
+        }
+        chooser.value=pickedGroup;quotaInfo.append(chooser);
+      } else if (groups.length===1) {
+        quotaInfo.append(node('small','额度组 · '+group));
+      }
+      const readout = quotaStatus==='disabled' ? (isEn ? 'CLI quota disabled in Appearance' : 'CLI 额度查询已在外观设置中关闭')
+        : quotaStatus==='refreshing' ? (isEn ? 'Syncing CLI quota…' : '正在同步 CLI 账号额度…')
+        : staleSnapshot ? (isEn ? 'CLI quota cache expired' : 'CLI 额度缓存已过期')
+        : quotaStatus==='unavailable' ? (seenAt && groups.length ? (isEn ? 'CLI cache from '+readTime(seenAt) : '暂用 CLI 缓存（'+readTime(seenAt)+'）') : (isEn ? 'CLI quota unavailable' : 'CLI 额度暂不可用'))
+        : seenAt && groups.length ? (isEn ? 'CLI account · '+readTime(seenAt) : 'CLI 账号额度 · '+readTime(seenAt))
+        : (isEn ? 'Waiting for CLI quota' : '等待 CLI 账号额度');
+      const stamp = node('small',readout);
+      stamp.title = isEn ? readout + ' (Source: agy /usage CLI account)' : readout + '（数据来自本机 agy /usage 登录账号）';
+      stamp.setAttribute('aria-live','polite');
+      const syncQuota = styled('button','ag-sync',isEn ? 'Sync CLI' : '同步额度');
+      syncQuota.type = 'button';
+      syncQuota.disabled = quotaStatus==='refreshing' || quotaStatus==='disabled';
+      syncQuota.title = isEn ? 'Refresh CLI account quota (agy /usage)' : '后台刷新 CLI 账号模型额度（agy /usage）';
+      quotaInfo.append(stamp,syncQuota);
+      details.append(quotaInfo);
+      if (explainedKey) {
+        const active = [...details.querySelectorAll('[data-ag-chart]')].find(b=>b.dataset.agChart===explainedKey);
+        if (active) details.append(styled('p','ag-explain',active.title));
+      }
+      if (focusKey) [...details.querySelectorAll('[data-ag-chart]')].find(e=>e.dataset.agChart===focusKey)?.focus({preventScroll:true});
+      if (focusPicker) details.querySelector('.ag-select')?.focus({preventScroll:true});
+      if (focusSync) details.querySelector('.ag-sync')?.focus({preventScroll:true});
+      return;
+    }
+    const hero = styled('div','ag-hero');
     const remaining = num(data?.context) && num(data?.limit) && data.limit > 0 ? Math.max(0,data.limit-data.context) : null;
     const contextHelp = '已用 ' + token(data?.context) + '，模型上限 ' + token(data?.limit) + '，剩余 ' + token(remaining) + '。';
-    major.append(dial('capacity','上下文已用',used,token(data?.context),color, contextHelp));
-    function quotaRing(period,name,tint,reading) {
-      const {value,resetAt} = reading;
-      const hint = group ? group + '的' + name + '额度。' : groups.length ? '选择额度模型组。' : '等待后台读取额度。';
-      const explanation = hint + (num(value) ? '上次读取的剩余额度为 ' + Number(value.toFixed(1)) + '%。' : '尚无可确认的剩余百分比。')
-        + (resetAt ? '下次重置时间（本地）' + readTime(resetAt) + '。' : '');
-      return dial('quota-'+period,name+'剩余',value,resetCountdown(resetAt,now),tint,explanation);
-    }
-    major.append(quotaRing('five','5 小时','var(--ag-cache)',five),quotaRing('week','每周','var(--ag-quota-week)',week));
-    details.append(major);
-    const quotaInfo = styled('div','ag-quota-info');
-    if (groups.length>1) {
-      const chooser = styled('select','ag-select');
-      chooser.setAttribute('aria-label','选择额度模型组');
-      const placeholder = node('option',selected ? '当前模型组 · '+selected : '选择额度模型组');
-      placeholder.value='';chooser.append(placeholder);
-      for (const name of groups) {
-        const opt=node('option',name);opt.value=name;chooser.append(opt);
-      }
-      chooser.value=pickedGroup;quotaInfo.append(chooser);
-    } else if (groups.length===1) {
-      quotaInfo.append(node('small','额度组 · '+group));
-    }
-    const isEn = window.__agLocalZhControl?.getLang?.() === 'en';
-    const wantTitle = isEn ? 'Usage & CLI Quota' : '用量与额度';
-    if (headerTitle.textContent !== wantTitle) headerTitle.textContent = wantTitle;
-    const readout = quotaStatus==='disabled' ? (isEn ? 'CLI quota disabled in Appearance' : 'CLI 额度查询已在外观设置中关闭')
-      : quotaStatus==='refreshing' ? (isEn ? 'Syncing CLI quota…' : '正在同步 CLI 账号额度…')
-      : staleSnapshot ? (isEn ? 'CLI quota cache expired' : 'CLI 额度缓存已过期')
-      : quotaStatus==='unavailable' ? (seenAt && groups.length ? (isEn ? 'CLI cache from '+readTime(seenAt) : '暂用 CLI 缓存（'+readTime(seenAt)+'）') : (isEn ? 'CLI quota unavailable' : 'CLI 额度暂不可用'))
-      : seenAt && groups.length ? (isEn ? 'CLI account · '+readTime(seenAt) : 'CLI 账号额度 · '+readTime(seenAt))
-      : (isEn ? 'Waiting for CLI quota' : '等待 CLI 账号额度');
-    const stamp = node('small',readout);
-    stamp.title = isEn ? readout + ' (Source: agy /usage CLI account)' : readout + '（数据来自本机 agy /usage 登录账号）';
-    stamp.setAttribute('aria-live','polite');
-    const syncQuota = styled('button','ag-sync',isEn ? 'Sync CLI' : '同步额度');
-    syncQuota.type = 'button';
-    syncQuota.disabled = quotaStatus==='refreshing' || quotaStatus==='disabled';
-    syncQuota.title = isEn ? 'Refresh CLI account quota (agy /usage)' : '后台刷新 CLI 账号模型额度（agy /usage）';
-    quotaInfo.append(stamp,syncQuota);
-    details.append(quotaInfo);
+    hero.append(dial('capacity',isEn?'Context':'上下文已用',used,'',color, contextHelp));
+    const heroMeta = styled('div','ag-hero-meta');
+    const metaLine = (k, v) => { const r = node('div'); r.append(node('span', k + '：'), node('b', v)); return r; };
+    heroMeta.append(
+      metaLine(isEn?'Used':'已用上下文', token(data?.context)),
+      metaLine(isEn?'Limit':'模型上限', token(data?.limit)),
+      metaLine(isEn?'Remaining':'剩余可用', token(remaining))
+    );
+    hero.append(heroMeta);
+    details.append(hero);
     if (ready) {
       const minor = styled('div','ag-minor');
       const stream = num(data.stream) ? data.stream : num(data.output) && num(data.speed) && data.speed>0 ? data.output/data.speed : null;
@@ -454,6 +728,42 @@
         dial('generate','流式生成占时',portion(stream,totalTime),num(data.speed) ? data.speed.toFixed(1) + ' tok/s' : secs(stream),'var(--ag-speed)',timeHelp)
       );
       details.append(minor);
+      const pts = Array.isArray(data.history) ? data.history.filter(h => num(h?.context)) : [];
+      if (pts.length >= 2) {
+        const trend = styled('div','ag-trend');
+        const head = styled('div','ag-trend-head');
+        const firstCtx = pts[0].context, lastCtx = pts[pts.length - 1].context;
+        const delta = lastCtx - firstCtx;
+        const deltaTxt = (delta >= 0 ? '+' : '') + fmt(delta);
+        head.append(
+          node('span', isEn ? `Context trend (${pts.length} calls)` : `上下文趋势（近 ${pts.length} 次调用）`),
+          node('b', deltaTxt + ' tok')
+        );
+        const w = 260, h = 28, pad = 2;
+        const maxVal = Math.max(...pts.map(p => p.context), num(data.limit) ? data.limit * 0.15 : 1, 1);
+        const minVal = Math.min(...pts.map(p => p.context));
+        const span = Math.max(maxVal - minVal, 1);
+        const coords = pts.map((p, i) => {
+          const x = pad + (i / (pts.length - 1)) * (w - pad * 2);
+          const y = h - pad - ((p.context - minVal) / span) * (h - pad * 2);
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(' ');
+        const svgNs = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNs, 'svg');
+        svg.setAttribute('class', 'ag-spark');
+        svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+        svg.setAttribute('aria-hidden', 'true');
+        const lineEl = document.createElementNS(svgNs, 'polyline');
+        lineEl.setAttribute('fill', 'none');
+        lineEl.setAttribute('stroke', color);
+        lineEl.setAttribute('stroke-width', '1.8');
+        lineEl.setAttribute('stroke-linecap', 'round');
+        lineEl.setAttribute('stroke-linejoin', 'round');
+        lineEl.setAttribute('points', coords);
+        svg.append(lineEl);
+        trend.append(head, svg);
+        details.append(trend);
+      }
     } else {
       const message = !activeId ? '打开对话可查看调用统计。' : data?.state === 'unavailable' ? '暂时无法读取用量。'
         : data?.state === 'empty' ? '等待首次用量记录。' : '正在读取用量…';
@@ -468,6 +778,11 @@
     if (focusSync) details.querySelector('.ag-sync')?.focus({preventScroll:true});
   }
   details.addEventListener('click',async e=>{
+    const qStyleBtn = e.target.closest?.('button[data-ag-qstyle]');
+    if (qStyleBtn) {
+      setQuotaStyle(qStyleBtn.dataset.agQstyle);
+      return;
+    }
     if (e.target.closest?.('button.ag-sync')) {
       await requestQuota(true);
       return;
@@ -584,11 +899,58 @@
   function close(restoreFocus=false) {
     if (!open) return;
     open = false;
-    showUsage = false;
+    activeTab = 'overview';
     explainedKey = '';
     button.setAttribute('aria-expanded','false');
     card.hidden = true;
     if (restoreFocus) button.focus();
+  }
+
+  const paneBadges = new Map();
+  function collectSecondaryPanes() {
+    const found = new Map();
+    const candidates = [
+      ...document.querySelectorAll('[data-testid="conversation-view"][data-cascade-id]'),
+      ...document.querySelectorAll('[data-testid="side-question-tab-content"][data-cascade-id]')
+    ];
+    for (const el of candidates) {
+      if (!visible(el)) continue;
+      const cid = canonical(el.dataset.cascadeId);
+      if (!cid || cid === activeId || found.has(cid)) continue;
+      found.set(cid, el);
+      if (found.size >= 4) break;
+    }
+    for (const [cid, badge] of paneBadges) {
+      if (!found.has(cid)) { badge.remove(); paneBadges.delete(cid); }
+    }
+    return found;
+  }
+
+  function updateSecondaryBadges(secondaryMap) {
+    const panes = collectSecondaryPanes();
+    const isEn = window.__agLocalZhControl?.getLang?.() === 'en';
+    for (const [cid, container] of panes) {
+      let badge = paneBadges.get(cid);
+      if (!badge) {
+        badge = styled('span', 'ag-pane-badge');
+        badge.dataset.awOwned = '';
+        const dot = styled('span', 'ag-pane-dot');
+        const txt = node('span', '—');
+        badge.append(dot, txt);
+        paneBadges.set(cid, badge);
+      }
+      if (getComputedStyle(container).position === 'static') container.style.position = 'relative';
+      if (badge.parentElement !== container) container.append(badge);
+      const m = secondaryMap?.[cid];
+      const sess = formatSessionStatus(m?.sessionStatus, isEn);
+      const pct = m?.state === 'ready' ? portion(m.context, m.limit) : null;
+      const dot = badge.firstElementChild;
+      const txt = badge.lastElementChild;
+      if (dot.dataset.status !== sess.state) dot.dataset.status = sess.state;
+      const label = (isEn ? 'Ctx ' : '上下文 ') + (num(pct) ? Number(pct.toFixed(1)) + '%' : '—');
+      if (txt.textContent !== label) txt.textContent = label;
+      badge.title = `${sess.label} · ${token(m?.context)} / ${token(m?.limit)}`;
+    }
   }
 
   function sync() {
@@ -612,11 +974,14 @@
     }
     if (refreshQuota()) draw();
     if (open) position();
-    return {id:activeId, mounted:visible(button) === true, pageVisible:document.visibilityState !== 'hidden', open, showUsage};
+    const secondaryIds = [...collectSecondaryPanes().keys()];
+    const modelName = (anchor?.textContent || '').trim().slice(0, 80);
+    return {id:activeId, modelName, secondaryIds, tab:activeTab, mounted:visible(button) === true, pageVisible:document.visibilityState !== 'hidden', open, showUsage:activeTab==='usage'};
   }
 
-  function update(id,payload) {
+  function update(id,payload,secondaryMap) {
     const state = sync();
+    if (secondaryMap) updateSecondaryBadges(secondaryMap);
     if (!state.mounted || !activeId || id !== activeId || !payload) return state;
     const next = JSON.stringify(payload);
     if (next !== signature) {
@@ -628,11 +993,13 @@
     return state;
   }
 
-  button.addEventListener('click', event => {
-    event.stopPropagation();
-    if (open) return close(true);
+  function openTab(tab = 'overview') {
+    const target = ['overview', 'usage', 'quota'].includes(tab) ? tab : 'overview';
     sync();
-    if (!visible(button)) return;
+    if (!visible(button)) return false;
+    if (open && activeTab === target) { close(true); return true; }
+    activeTab = target;
+    explainedKey = '';
     open = true;
     button.setAttribute('aria-expanded','true');
     const rgb = getComputedStyle(button).color.match(/[\d.]+/g)?.slice(0,3).map(Number);
@@ -642,6 +1009,14 @@
     position();
     card.focus({preventScroll:true});
     void requestQuota();
+    return true;
+  }
+
+  button.addEventListener('click', event => {
+    event.stopPropagation();
+    const ringKey = event.target?.closest?.('[data-summary-ring]')?.dataset?.summaryRing;
+    const wantTab = ringKey === 'five' || ringKey === 'week' ? 'quota' : 'overview';
+    openTab(wantTab);
   });
   closeButton.addEventListener('click',() => close(true));
   document.addEventListener('pointerdown',e => { if (open && !card.contains(e.target) && !button.contains(e.target) && !e.target.closest?.('#aw-account-menu')) close(); },true);
@@ -661,6 +1036,6 @@
   });
   obs.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['data-cascade-id','data-selected']});
   const resize = new ResizeObserver(scheduleSync);
-  window.__agContextPanel = Object.freeze({get:sync,update});
+  window.__agContextPanel = Object.freeze({get:sync,update,openTab});
   return sync();
 })()

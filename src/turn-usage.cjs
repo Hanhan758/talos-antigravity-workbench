@@ -5,7 +5,7 @@ const { sourceFor, decode } = require('./metrics.cjs');
 
 function totals() {
   return { calls:0, input:0, inputN:0, output:0, outputN:0,
-    cacheRead:0, cacheN:0, duration:0, timed:0 };
+    cacheRead:0, cacheN:0, duration:0, timed:0, streamOut:0, streamSec:0 };
 }
 
 function add(sum, row) {
@@ -17,6 +17,9 @@ function add(sum, row) {
   }
   if (row.ttft !== null && row.stream !== null) {
     sum.duration += row.ttft + row.stream; sum.timed++;
+  }
+  if (row.output !== null && row.stream !== null && row.stream > 0) {
+    sum.streamOut += row.output; sum.streamSec += row.stream;
   }
 }
 
@@ -60,7 +63,12 @@ function aggregate(db) {
     const index = starts.length-tail.length+i;
     return {number:index+1,...(recent.get(index) || totals())};
   }).reverse();
-  return {state:'ready',session,turnCount:starts.length,turns,unmapped,partial:bounded || missing>0};
+  let subagentSteps = 0;
+  try {
+    const row = db.prepare('SELECT count(*) AS c FROM steps WHERE has_subtrajectory = 1').get();
+    if (row && Number.isSafeInteger(row.c) && row.c > 0) subagentSteps = row.c;
+  } catch {}
+  return {state:'ready',session,turnCount:starts.length,turns,unmapped,subagentSteps,partial:bounded || missing>0};
 }
 
 function readSnapshot(uuid) {

@@ -1,4 +1,4 @@
-((css, initialMode, initialLang, initialQuota, initialAccount) => {
+((css, initialCustomCss, initialMode, initialLang, initialQuota, initialFont, initialAccount) => {
   'use strict';
   if (window !== window.top || !document.body || location.protocol !== 'https:' || location.hostname !== '127.0.0.1' ||
       !location.port || typeof window.electronNative?.getZoomLevel !== 'function' ||
@@ -11,14 +11,20 @@
   const valid = mode => Object.hasOwn(names,mode);
   const validLang = lang => lang==='zh' || lang==='en';
   const validQuota = v => v==='on' || v==='off';
+  const validFont = v => ['default','sans','serif','mono'].includes(v);
   const style = document.createElement('style');
   style.id = 'ag-local-appearance-style';
   style.textContent = css;
   document.head.append(style);
+  const customStyle = document.createElement('style');
+  customStyle.id = 'ag-local-custom-style';
+  customStyle.textContent = typeof initialCustomCss === 'string' ? initialCustomCss : '';
+  document.head.append(customStyle);
   let current = valid(initialMode) ? initialMode : 'google';
   let currentLang = validLang(initialLang) ? initialLang : (window.__agLocalZhControl?.getLang?.() || 'zh');
   let currentQuota = validQuota(initialQuota) ? initialQuota : 'on';
-  let pending = null, saveError = false, pendingLang = null, langSaveError = false, pendingQuota = null, quotaSaveError = false, settingAnchor = null;
+  let currentFont = validFont(initialFont) ? initialFont : 'default';
+  let pending = null, saveError = false, pendingLang = null, langSaveError = false, pendingQuota = null, quotaSaveError = false, pendingFont = null, fontSaveError = false, settingAnchor = null;
   const scheme = matchMedia('(prefers-color-scheme: dark)');
   const shown = el => el?.isConnected && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
 
@@ -43,6 +49,11 @@
       if (root.dataset.agAppearance!==current) root.dataset.agAppearance=current;
       const actualTone=tone();
       if (root.dataset.agTone!==actualTone) root.dataset.agTone=actualTone;
+    }
+    if (currentFont==='default') {
+      root.removeAttribute('data-ag-font');
+    } else if (root.dataset.agFont!==currentFont) {
+      root.dataset.agFont=currentFont;
     }
     if(saveError) account.cardToggle.title='外观偏好尚未保存';
   }
@@ -72,6 +83,15 @@
     }
     renderSettingsRows();
     try { window.__agLocalAppearanceChanged?.('quota'); } catch {}
+  }
+  function chooseFont(next) {
+    if(!validFont(next) || next===currentFont && !fontSaveError) return;
+    currentFont=next;
+    pendingFont={id:crypto.randomUUID(),font:next};
+    fontSaveError=false;
+    paint();
+    renderSettingsRows();
+    try { window.__agLocalAppearanceChanged?.('font'); } catch {}
   }
   const account=(__AG_ACCOUNT_FOOTER__)({choose,getMode:()=>current,getLang:()=>currentLang,getSettings:()=>layout.settingsTarget(settingAnchor),names,namesEn,initialAccount});
   const side=account.element,cardSlot=document.createElement('span');
@@ -130,6 +150,19 @@
   }
   quotaRow.append(quotaLabel,quotaGroup);
 
+  const fontRow=document.createElement('div');
+  fontRow.id='aw-settings-font-row';fontRow.className='aw-settings-row';fontRow.dataset.awOwned='';
+  const fontLabel=document.createElement('span');fontLabel.className='aw-settings-label';
+  const fontGroup=document.createElement('div');fontGroup.className='aw-settings-pill';fontGroup.setAttribute('role','radiogroup');
+  const fontButtons=new Map();
+  for(const code of ['default','sans','serif','mono']) {
+    const btn=document.createElement('button');btn.type='button';btn.className='aw-settings-pill-btn';
+    btn.dataset.awFont=code;btn.setAttribute('role','radio');
+    btn.addEventListener('click',()=>chooseFont(code));
+    fontButtons.set(code,btn);fontGroup.append(btn);
+  }
+  fontRow.append(fontLabel,fontGroup);
+
   const setText=(el,val)=>{if(el.textContent!==val)el.textContent=val;};
   const setAttr=(el,k,val)=>{if(el.getAttribute(k)!==val)el.setAttribute(k,val);};
   const setTitle=(el,val)=>{if(el.title!==val)el.title=val;};
@@ -158,6 +191,16 @@
       setAttr(btn,'aria-checked',String(code===currentQuota));
       setText(btn,code==='on'?(zh?'开启':'On'):(zh?'关闭':'Off'));
       setTitle(btn,code==='on'?(zh?'通过本机 agy /usage 同步 CLI 账号额度':'Sync CLI account quota via agy /usage'):(zh?'关闭后台 CLI 额度查询':'Disable background CLI quota polling'));
+    }
+    const fLabel=zh?'阅读字体':'Reading Font';
+    setText(fontLabel,fLabel);
+    setAttr(fontGroup,'aria-label',fLabel);
+    const fNamesZh={default:'默认',sans:'无衬线',serif:'衬线',mono:'等宽'};
+    const fNamesEn={default:'Default',sans:'Sans',serif:'Serif',mono:'Mono'};
+    for(const [code,btn] of fontButtons) {
+      setAttr(btn,'aria-checked',String(code===currentFont));
+      setText(btn,zh?fNamesZh[code]:fNamesEn[code]);
+      setTitle(btn,zh?('界面与对话字体：'+fNamesZh[code]):('Interface & prose font: '+fNamesEn[code]));
     }
   }
 
@@ -191,7 +234,7 @@
 
   function mountSettingsRows() {
     renderSettingsRows();
-    if(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected) return;
+    if(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected) return;
     if(!/settings/i.test(location.pathname+location.hash) &&
        !document.querySelector('dialog[open],[role="dialog"],[aria-modal="true"],[data-testid*="settings"],[class~="group/nav-item"]')) return;
     const target=findAppearanceCard();
@@ -200,8 +243,8 @@
     const cs=getComputedStyle(nativeThemeRow);
     const padL=cs.paddingLeft, padR=cs.paddingRight;
     if(padL && padL!=='0px') {
-      themeRow.style.paddingLeft=langRow.style.paddingLeft=quotaRow.style.paddingLeft=padL;
-      themeRow.style.paddingRight=langRow.style.paddingRight=quotaRow.style.paddingRight=padR||padL;
+      themeRow.style.paddingLeft=langRow.style.paddingLeft=quotaRow.style.paddingLeft=fontRow.style.paddingLeft=padL;
+      themeRow.style.paddingRight=langRow.style.paddingRight=quotaRow.style.paddingRight=fontRow.style.paddingRight=padR||padL;
     }
     if(themeRow.parentElement!==card || themeRow.previousElementSibling!==nativeThemeRow) {
       nativeThemeRow.insertAdjacentElement('afterend',themeRow);
@@ -211,6 +254,9 @@
     }
     if(quotaRow.parentElement!==card || quotaRow.previousElementSibling!==langRow) {
       langRow.insertAdjacentElement('afterend',quotaRow);
+    }
+    if(fontRow.parentElement!==card || fontRow.previousElementSibling!==quotaRow) {
+      quotaRow.insertAdjacentElement('afterend',fontRow);
     }
   }
 
@@ -270,7 +316,7 @@
     if(!style.isConnected) document.head.append(style);
   }
   layout.setRefresh(mount);
-  function reconcile(mode,ack=null,failed=false,lang=null,langAck=null,langFailed=false,quota=null,quotaAck=null,quotaFailed=false) {
+  function reconcile(mode,ack=null,failed=false,lang=null,langAck=null,langFailed=false,quota=null,quotaAck=null,quotaFailed=false,font=null,fontAck=null,fontFailed=false) {
     if(ack && pending?.id===ack) {
       if(failed) saveError=true;
       else {pending=null;saveError=false;}
@@ -291,6 +337,13 @@
     if(!pendingQuota && validQuota(quota) && quota!==currentQuota) {
       currentQuota=quota;
     }
+    if(fontAck && pendingFont?.id===fontAck) {
+      if(fontFailed) fontSaveError=true;
+      else {pendingFont=null;fontSaveError=false;}
+    }
+    if(!pendingFont && validFont(font) && font!==currentFont) {
+      currentFont=font;
+    }
     paint(); mount();
   }
   function snapshot() {
@@ -299,7 +352,7 @@
     const composer=document.querySelector('[id="antigravity.agentSidePanelInputBox"]');
     const selector=composer?.querySelector('[data-testid="model-selector-trigger"]');
     const paragraph=[...document.querySelectorAll('[data-markdown-root] p,.prose p,.markdown p')].find(shown);
-    return {mode:current,lang:currentLang,quota:currentQuota,tone:tone(), pending, pendingLang, pendingQuota, structure:layout.status(), settingsRowHidden:!!settingAnchor?.isConnected && !shown(settingAnchor), settingsInjected:!!(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected), account:account.info(), sidebar:!!shown(side), cardEntry:!!cardSlot.isConnected,
+    return {mode:current,lang:currentLang,quota:currentQuota,font:currentFont,tone:tone(), pending, pendingLang, pendingQuota, pendingFont, structure:layout.status(), settingsRowHidden:!!settingAnchor?.isConnected && !shown(settingAnchor), settingsInjected:!!(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected), account:account.info(), sidebar:!!shown(side), cardEntry:!!cardSlot.isConnected,
       pageColor:styles.getPropertyValue('--background').trim().slice(0,64),
       sidebarColor:styles.getPropertyValue('--sidebar').trim().slice(0,64),
       composerColor:composer?getComputedStyle(composer).backgroundColor:null,
@@ -311,7 +364,7 @@
   }
   let settingsMountTimer=null;
   const settingsObserver=new MutationObserver(mutations=>{
-    if(settingsMountTimer || (themeRow.isConnected && langRow.isConnected && quotaRow.isConnected)) return;
+    if(settingsMountTimer || (themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected)) return;
     const external=mutations.some(m=>!(m.target instanceof Element && m.target.closest?.('[data-aw-owned]')));
     if(!external) return;
     settingsMountTimer=setTimeout(()=>{settingsMountTimer=null;mountSettingsRows();},140);
@@ -320,6 +373,12 @@
   const observer=new MutationObserver(()=>{if(current!=='google') paint();});
   for(const el of [root,document.body]) observer.observe(el,{attributes:true,attributeFilter:['class','style','data-theme','data-agy-theme']});
   scheme.addEventListener('change',paint);
-  window.__agLocalAppearance=Object.freeze({reconcile,snapshot,takeProfile:account.take,acceptProfile:account.cache});
+  function setCustomCss(nextCss) {
+    const val = typeof nextCss === 'string' ? nextCss : '';
+    if (customStyle.textContent !== val) customStyle.textContent = val;
+    if (!customStyle.isConnected) document.head.append(customStyle);
+    return true;
+  }
+  window.__agLocalAppearance=Object.freeze({reconcile,snapshot,takeProfile:account.take,acceptProfile:account.cache,setCustomCss});
   paint(); mount(); return snapshot();
-})(__AG_APPEARANCE_CSS__,__AG_INITIAL_APPEARANCE__,__AG_INITIAL_LANG__,__AG_INITIAL_QUOTA__,__AG_ACCOUNT_CONTEXT__)
+})(__AG_APPEARANCE_CSS__,__AG_CUSTOM_CSS__,__AG_INITIAL_APPEARANCE__,__AG_INITIAL_LANG__,__AG_INITIAL_QUOTA__,__AG_INITIAL_FONT__,__AG_ACCOUNT_CONTEXT__)

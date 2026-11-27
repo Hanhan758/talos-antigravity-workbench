@@ -170,7 +170,7 @@
     setTimeout(()=>target.removeAttribute('data-aw-focus'),1300);
   }
   function navTo(key){direct(key);}
-  function stats(){document.getElementById('ag-local-context-trigger')?.click();}
+  function stats(){if(window.__agContextPanel?.openTab)window.__agContextPanel.openTab('quota');else document.getElementById('ag-local-context-trigger')?.click();}
   function drawNav() {
     const isEn = () => window.__agLocalZhControl?.getLang?.() === 'en';
     const langTag = isEn() ? 'en' : 'zh';
