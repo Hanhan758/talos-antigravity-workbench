@@ -232,12 +232,33 @@
     }
   }, true);
 
+  // 4. 模型切换瞬间扫光反馈（监听模型选择器文案变化）
+  let lastModelLabel = '';
+  let modelSwitchTimer = null;
+  function watchModelSwitch() {
+    const trigger = document.querySelector('[id="antigravity.agentSidePanelInputBox"] [data-testid="model-selector-trigger"]') ||
+      document.querySelector('[data-testid="model-selector-trigger"]');
+    if (!trigger || !vis(trigger)) return;
+    const label = clean(trigger.textContent);
+    if (!label) return;
+    if (lastModelLabel && lastModelLabel !== label) {
+      trigger.removeAttribute('data-ag-model-switched');
+      void trigger.offsetWidth;
+      trigger.setAttribute('data-ag-model-switched', '');
+      if (modelSwitchTimer) clearTimeout(modelSwitchTimer);
+      modelSwitchTimer = setTimeout(() => { trigger.removeAttribute('data-ag-model-switched'); }, 650);
+    }
+    lastModelLabel = label;
+  }
+
   let outlineTimer = null;
   const obs = new MutationObserver(() => {
+    watchModelSwitch();
     if (outlineTimer) return;
     outlineTimer = setTimeout(() => { outlineTimer = null; refreshOutline(); }, 450);
   });
-  obs.observe(document.body, { childList: true, subtree: true });
+  obs.observe(document.body, { childList: true, subtree: true, characterData: true });
+  watchModelSwitch();
   refreshOutline();
 
   window.__agWorkbenchExtras = Object.freeze({

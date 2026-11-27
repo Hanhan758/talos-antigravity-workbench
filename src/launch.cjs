@@ -15,12 +15,23 @@ fs.mkdirSync(profile, { recursive: true, mode: 0o700 });
 const panelScript = fs.readFileSync(path.join(__dirname, 'panel.js'), 'utf8').trim().replace(/;$/, '');
 const quotaScript = fs.readFileSync(path.join(__dirname, 'quota.js'), 'utf8').trim();
 const extrasBaseScript = fs.readFileSync(path.join(__dirname, 'workbench-extras.js'), 'utf8').trim().replace(/;$/, '');
+const modelPickerBaseScript = fs.readFileSync(path.join(__dirname, 'model-picker.js'), 'utf8').trim().replace(/;$/, '');
 const appearancePref = require('./appearance-pref.cjs');
 const displayProfile = require('./profile-display.cjs');
 const { loadI18nDict, loadCustomCss, loadSnippets, defaultUserDir } = require('./user-overrides.cjs');
 const { estimateCost } = require('./pricing.cjs');
 const { createStatusNotifier } = require('./notify.cjs');
+const { readCachedCatalog, readAgyModelsCatalog } = require('./model-catalog.cjs');
 const statusNotifier = createStatusNotifier();
+const modelsCachePath = path.join(profile, 'models-catalog.json');
+let cachedCliModels = readCachedCatalog(modelsCachePath);
+let cachedCliModelsVersion = cachedCliModels.length >= 2 ? 1 : 0;
+void readAgyModelsCatalog(modelsCachePath).then(list => {
+  if (Array.isArray(list) && list.length >= 2) {
+    cachedCliModels = list;
+    cachedCliModelsVersion += 1;
+  }
+}).catch(() => {});
 const baseI18nPath = path.join(__dirname, 'i18n.json');
 let currentDictObj = loadI18nDict(baseI18nPath);
 let localizationScript = script.replace('__AG_I18N_DICT__', () => JSON.stringify(currentDictObj));
@@ -117,7 +128,7 @@ receivePipe.on('data', chunk => {
       pending.delete(message.id);
       callback(message);
     } else if (message.method === 'Runtime.bindingCalled' && message.params?.name === '__agLocalAppearanceChanged' &&
-        ['selection', 'language', 'quota', 'font', 'width', 'send', 'notify'].includes(message.params.payload)) {
+        ['selection', 'language', 'quota', 'font', 'width', 'send', 'notify', 'picker'].includes(message.params.payload)) {
       const entry = themeSessions.get(message.sessionId);
       if (entry) {
         syncAppearance(message.sessionId,entry.url)
@@ -324,6 +335,7 @@ async function syncAppearance(session,url) {
       .replace('__AG_INITIAL_WIDTH__',()=>JSON.stringify(appearancePref.getWidth()))
       .replace('__AG_INITIAL_SEND__',()=>JSON.stringify(appearancePref.getSend()))
       .replace('__AG_INITIAL_NOTIFY__',()=>JSON.stringify(appearancePref.getNotify()))
+      .replace('__AG_INITIAL_PICKER__',()=>JSON.stringify(appearancePref.getPicker()))
       .replace('__AG_ACCOUNT_CONTEXT__',()=>JSON.stringify(displayProfile.context()));
     return evaluate(session,url,`return (${code.trim().replace(/;$/,'')});`);
   }
@@ -359,12 +371,16 @@ async function syncAppearance(session,url) {
   const notifyChoice=read.pendingNotify;
   const validNotifyChoice=notifyChoice && typeof notifyChoice.id==='string' && notifyChoice.id.length===36 && appearancePref.validNotify(notifyChoice.notify);
   const notifyOk=!validNotifyChoice || appearancePref.saveNotify(notifyChoice.notify);
+  const pickerChoice=read.pendingPicker;
+  const validPickerChoice=pickerChoice && typeof pickerChoice.id==='string' && pickerChoice.id.length===36 && appearancePref.validPicker(pickerChoice.picker);
+  const pickerOk=!validPickerChoice || appearancePref.savePicker(pickerChoice.picker);
   const currentLang=appearancePref.getLang();
   const currentQuota=appearancePref.getQuota();
   const currentFont=appearancePref.getFont();
   const currentWidth=appearancePref.getWidth();
   const currentSend=appearancePref.getSend();
   const currentNotify=appearancePref.getNotify();
+  const currentPicker=appearancePref.getPicker();
   const args=[
     appearancePref.get(),validChoice ? choice.id : null,!ok,
     currentLang,validLangChoice ? langChoice.id : null,!langOk,
@@ -372,7 +388,8 @@ async function syncAppearance(session,url) {
     currentFont,validFontChoice ? fontChoice.id : null,!fontOk,
     currentWidth,validWidthChoice ? widthChoice.id : null,!widthOk,
     currentSend,validSendChoice ? sendChoice.id : null,!sendOk,
-    currentNotify,validNotifyChoice ? notifyChoice.id : null,!notifyOk
+    currentNotify,validNotifyChoice ? notifyChoice.id : null,!notifyOk,
+    currentPicker,validPickerChoice ? pickerChoice.id : null,!pickerOk
   ].map(v=>JSON.stringify(v)).join(',');
   return evaluate(session,url,`window.__agLocalZhControl?.setLang(${JSON.stringify(currentLang)});const theme=window.__agLocalAppearance;if(!theme)return null;theme.reconcile(${args});return theme.snapshot();`);
 }
@@ -398,6 +415,15 @@ async function localize(target) {
       .replace('__AG_INITIAL_SNIPPETS__', () => JSON.stringify(currentSnippets))
       .replace('__AG_INITIAL_SEND_SHORTCUT__', () => JSON.stringify(appearancePref.getSend()));
     await evaluate(session, target.url, `return (${extrasCode});`).catch(() => {});
+  }
+  const pickerReady = await evaluate(session, target.url, 'return !!window.__agModelPicker;').catch(() => true);
+  if (pickerReady === false) {
+    const pickerCode = modelPickerBaseScript
+      .replace('__AG_INITIAL_MODEL_PICKER__', () => JSON.stringify(appearancePref.getPicker()))
+      .replace('__AG_INITIAL_CLI_MODELS__', () => JSON.stringify(cachedCliModels));
+    await evaluate(session, target.url, `return (${pickerCode});`).catch(() => {});
+  } else if (cachedCliModels.length >= 2) {
+    await evaluate(session, target.url, `const st = window.__agModelPicker?.getStatus?.(); if (st && (st.catalogSource !== 'cli' || st.catalogVersion !== ${cachedCliModelsVersion})) window.__agModelPicker.setCatalog(${JSON.stringify(cachedCliModels)}, 'cli', ${cachedCliModelsVersion}); return true;`).catch(() => {});
   }
   const panel = await refreshPanel(session, target.url).catch(() => ({ mounted: false }));
   return { labels: state?.applied ? state.labels : [], panel, naming, appearance };

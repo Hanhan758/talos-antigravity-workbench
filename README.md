@@ -53,6 +53,10 @@
 
   ![Codex 风格工作台主题与用量额度统计浮窗](docs/screenshots/workbench-codex-quota.png)
 
+- **Codex 风格星尘模型选择器（紫罗兰星尘滑条 + N 档分组列表 + 3 枚快切胶囊）**
+
+  ![Codex 风格星尘模型选择器](docs/screenshots/codex-model-picker.png)
+
 ---
 
 ## 环境要求

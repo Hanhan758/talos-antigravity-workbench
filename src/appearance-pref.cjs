@@ -8,6 +8,7 @@ const fontKey='InterfaceFont';
 const widthKey='ReadingWidth';
 const sendKey='SendShortcut';
 const notifyKey='NotifyEnabled';
+const pickerKey='ModelPicker';
 const valid=mode=>['google','claude','codex'].includes(mode);
 const validLang=lang=>['zh','en'].includes(lang);
 const validQuota=v=>['on','off'].includes(v);
@@ -15,6 +16,7 @@ const validFont=v=>['default','sans','serif','mono'].includes(v);
 const validWidth=v=>['default','focus','wide','full'].includes(v);
 const validSend=v=>['enter','cmd-enter'].includes(v);
 const validNotify=v=>['on','off'].includes(v);
+const validPicker=v=>['codex','native'].includes(v);
 
 const saved=spawnSync('/usr/bin/defaults',['read',domain,key],{encoding:'utf8',timeout:1200,stdio:['ignore','pipe','ignore']});
 let mode=(saved.stdout||'').trim();
@@ -43,6 +45,10 @@ if(!validSend(sendShortcut)) sendShortcut='enter';
 const savedNotify=spawnSync('/usr/bin/defaults',['read',domain,notifyKey],{encoding:'utf8',timeout:1200,stdio:['ignore','pipe','ignore']});
 let notify=(savedNotify.stdout||'').trim();
 if(!validNotify(notify)) notify='on';
+
+const savedPicker=spawnSync('/usr/bin/defaults',['read',domain,pickerKey],{encoding:'utf8',timeout:1200,stdio:['ignore','pipe','ignore']});
+let picker=(savedPicker.stdout||'').trim();
+if(!validPicker(picker)) picker='codex';
 
 function save(next) {
   if(!valid(next)) return false;
@@ -93,6 +99,13 @@ function saveNotify(next) {
   if(result.status!==0) return false;
   notify=next; return true;
 }
+function savePicker(next) {
+  if(!validPicker(next)) return false;
+  if(next===picker) return true;
+  const result=spawnSync('/usr/bin/defaults',['write',domain,pickerKey,'-string',next],{timeout:1500,stdio:'ignore'});
+  if(result.status!==0) return false;
+  picker=next; return true;
+}
 module.exports={
   get:()=>mode,save,
   getLang:()=>lang,saveLang,
@@ -100,5 +113,6 @@ module.exports={
   getFont:()=>font,saveFont,validFont,
   getWidth:()=>width,saveWidth,validWidth,
   getSend:()=>sendShortcut,saveSend,validSend,
-  getNotify:()=>notify,saveNotify,validNotify
+  getNotify:()=>notify,saveNotify,validNotify,
+  getPicker:()=>picker,savePicker,validPicker
 };

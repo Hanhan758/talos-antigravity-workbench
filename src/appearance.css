@@ -92,30 +92,91 @@ html[data-ag-font] [id="antigravity.agentSidePanelInputBox"] [data-lexical-edito
 html[data-ag-font] :is([data-markdown-root],.prose,.markdown) :where(p,li,blockquote,h1,h2,h3,h4) {
   font-family:var(--aw-user-prose)!important;
 }
-/* 阅读栏宽度预设：专注 780px / 宽屏 1120px / 铺满。 */
-html[data-ag-width=focus] :is([data-testid="conversation-view"],[data-main-content-body]) :is([data-markdown-root],.prose,.markdown) {max-width:780px!important}
-html[data-ag-width=wide] :is([data-testid="conversation-view"],[data-main-content-body]) :is([data-markdown-root],.prose,.markdown) {max-width:1120px!important}
-html[data-ag-width=full] :is([data-testid="conversation-view"],[data-main-content-body]) :is([data-markdown-root],.prose,.markdown) {max-width:100%!important}
-/* 模型选择界面选择效果优化：在 Google / Claude / Codex 任意主题下增强悬停、选中与展开态视觉反馈。 */
+/* 阅读栏与对话容器宽度预设：同步放宽外层 Tailwind max-w 限制容器、消息流与底部输入框。 */
+html[data-ag-width=focus] :is([data-testid="conversation-view"],[data-main-content-body],main) :is([class*="max-w-"],[data-markdown-root],.prose,.markdown,[id="antigravity.agentSidePanelInputBox"]) {
+  max-width:780px!important;
+}
+html[data-ag-width=wide] :is([data-testid="conversation-view"],[data-main-content-body],main) :is([class*="max-w-"],[data-markdown-root],.prose,.markdown,[id="antigravity.agentSidePanelInputBox"]) {
+  max-width:1120px!important;
+}
+html[data-ag-width=full] :is([data-testid="conversation-view"],[data-main-content-body],main) :is([class*="max-w-"],[data-markdown-root],.prose,.markdown,[id="antigravity.agentSidePanelInputBox"]) {
+  max-width:calc(100% - 32px)!important;
+}
+/* 保持输入框自身在宽屏/铺满下同步撑开并居中，同时按比例放大默认输入框编辑区高度。 */
+[id="antigravity.agentSidePanelInputBox"] {
+  min-height:124px!important;
+}
+[id="antigravity.agentSidePanelInputBox"] [data-lexical-editor="true"] {
+  min-height:66px!important;max-height:38vh!important;padding-block:6px 10px!important;
+}
+html[data-ag-width=wide] [id="antigravity.agentSidePanelInputBox"] {width:100%!important;max-width:1120px!important;min-height:138px!important;margin-inline:auto!important}
+html[data-ag-width=wide] [id="antigravity.agentSidePanelInputBox"] [data-lexical-editor="true"] {min-height:78px!important}
+html[data-ag-width=full] [id="antigravity.agentSidePanelInputBox"] {width:100%!important;max-width:calc(100% - 32px)!important;min-height:148px!important;margin-inline:auto!important}
+html[data-ag-width=full] [id="antigravity.agentSidePanelInputBox"] [data-lexical-editor="true"] {min-height:88px!important}
+/* 模型选择界面动态效果：触发器弹性按压与切换扫光、菜单轻弹入场、选项滑动高亮与选中态动态强调条。 */
+@keyframes aw-model-pop {
+  from {opacity:0;transform:translateY(6px) scale(.975)}
+  to {opacity:1;transform:translateY(0) scale(1)}
+}
+@keyframes aw-model-shimmer {
+  0% {transform:translateX(-120%) skewX(-18deg);opacity:0}
+  25% {opacity:.55}
+  100% {transform:translateX(220%) skewX(-18deg);opacity:0}
+}
+@keyframes aw-model-pulse {
+  0% {box-shadow:0 0 0 0 color-mix(in srgb,var(--aw-accent,#4285f4) 45%,transparent)}
+  70% {box-shadow:0 0 0 6px color-mix(in srgb,var(--aw-accent,#4285f4) 0%,transparent)}
+  100% {box-shadow:0 0 0 0 color-mix(in srgb,var(--aw-accent,#4285f4) 0%,transparent)}
+}
 [data-testid="model-selector-trigger"] {
-  transition:background-color .14s ease,border-color .14s ease,box-shadow .14s ease!important;
+  position:relative!important;overflow:hidden!important;
+  transition:background-color .16s ease,border-color .16s ease,box-shadow .2s cubic-bezier(.22,1,.36,1),transform .14s cubic-bezier(.22,1,.36,1)!important;
 }
 [data-testid="model-selector-trigger"]:hover {
-  background-color:color-mix(in srgb,var(--aw-accent,#4285f4) 8%,var(--aw-tray,transparent))!important;
+  background-color:color-mix(in srgb,var(--aw-accent,#4285f4) 9%,var(--aw-tray,transparent))!important;
+}
+[data-testid="model-selector-trigger"]:active {
+  transform:scale(.982)!important;
 }
 [data-testid="model-selector-trigger"][aria-expanded="true"] {
-  background-color:color-mix(in srgb,var(--aw-accent,#4285f4) 12%,var(--aw-tray,transparent))!important;
-  box-shadow:0 0 0 1.5px color-mix(in srgb,var(--aw-accent,#4285f4) 48%,transparent)!important;
+  background-color:color-mix(in srgb,var(--aw-accent,#4285f4) 13%,var(--aw-tray,transparent))!important;
+  box-shadow:0 0 0 1.5px color-mix(in srgb,var(--aw-accent,#4285f4) 50%,transparent),0 2px 10px color-mix(in srgb,var(--aw-accent,#4285f4) 16%,transparent)!important;
+}
+[data-testid="model-selector-trigger"] svg:last-of-type {
+  transition:transform .22s cubic-bezier(.22,1,.36,1)!important;
+}
+[data-testid="model-selector-trigger"][aria-expanded="true"] svg:last-of-type {
+  transform:rotate(180deg)!important;
+}
+[data-testid="model-selector-trigger"][data-ag-model-switched] {
+  animation:aw-model-pulse .55s cubic-bezier(.22,1,.36,1)!important;
+}
+[data-testid="model-selector-trigger"][data-ag-model-switched]::after {
+  content:"";position:absolute;inset:0;width:45%;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--aw-accent,#4285f4) 36%,#fff),transparent);
+  animation:aw-model-shimmer .62s cubic-bezier(.22,1,.36,1) forwards;
 }
 :is([role="listbox"],[role="menu"],[data-radix-popper-content-wrapper]) :is([role="option"],[role="menuitem"],[role="menuitemradio"]) {
-  transition:background-color .12s ease,box-shadow .12s ease,transform .12s ease!important;
-  border-radius:var(--aw-row-radius,7px)!important;
+  position:relative;
+  transition:background-color .14s ease,box-shadow .16s cubic-bezier(.22,1,.36,1),transform .15s cubic-bezier(.22,1,.36,1),color .14s ease!important;
+  border-radius:var(--aw-row-radius,8px)!important;
 }
 :is([role="listbox"],[role="menu"],[data-radix-popper-content-wrapper]) :is([role="option"],[role="menuitem"],[role="menuitemradio"]):is(:hover,[data-highlighted=""],[data-highlighted="true"]) {
-  background-color:color-mix(in srgb,var(--aw-accent,#4285f4) 10%,transparent)!important;
+  background-color:color-mix(in srgb,var(--aw-accent,#4285f4) 11%,transparent)!important;
+  transform:translateX(3px)!important;
+  box-shadow:inset 2px 0 0 color-mix(in srgb,var(--aw-accent,#4285f4) 45%,transparent)!important;
+}
+:is([role="listbox"],[role="menu"],[data-radix-popper-content-wrapper]) :is([role="option"],[role="menuitem"],[role="menuitemradio"]):active {
+  transform:translateX(2px) scale(.99)!important;
 }
 :is([role="listbox"],[role="menu"],[data-radix-popper-content-wrapper]) :is([role="option"],[role="menuitem"],[role="menuitemradio"]):is([aria-selected="true"],[aria-checked="true"],[data-state="checked"],[data-selected="true"]) {
-  background-color:color-mix(in srgb,var(--aw-accent,#4285f4) 14%,transparent)!important;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--aw-accent,#4285f4) 17%,transparent),color-mix(in srgb,var(--aw-accent,#4285f4) 6%,transparent))!important;
   box-shadow:inset 3px 0 0 var(--aw-accent,#4285f4)!important;
-  font-weight:550!important;
+  font-weight:560!important;
+}
+@media (prefers-reduced-motion:reduce) {
+  [data-testid="model-selector-trigger"],[data-testid="model-selector-trigger"] *,
+  :is([data-radix-popper-content-wrapper],[role="listbox"],[role="menu"]) * {
+    animation:none!important;transition:none!important;transform:none!important;
+  }
 }

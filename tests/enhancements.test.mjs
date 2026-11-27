@@ -275,7 +275,71 @@ test('loadSnippets returns defaults or valid user snippets and new preferences v
 
   const extrasRaw = fs.readFileSync(path.join(srcDir, 'workbench-extras.js'), 'utf8');
   const panelRaw = fs.readFileSync(path.join(srcDir, 'panel.js'), 'utf8');
+  const cssRaw = fs.readFileSync(path.join(srcDir, 'appearance.css'), 'utf8');
   assert.match(extrasRaw, /ag-outline-rail/);
   assert.match(extrasRaw, /ag-snippet-drawer/);
+  assert.match(extrasRaw, /data-ag-model-switched/);
+  assert.match(cssRaw, /aw-model-pop/);
+  assert.match(cssRaw, /aw-model-shimmer/);
   assert.match(panelRaw, /Copy Sanitized Report/);
+});
+
+test('model-picker parses efforts, clusters models by base name, and validates picker preference', () => {
+  const pref = require(path.join(srcDir, 'appearance-pref.cjs'));
+  assert.equal(pref.validPicker('codex'), true);
+  assert.equal(pref.validPicker('native'), true);
+  assert.equal(pref.validPicker('other'), false);
+
+  const raw = fs.readFileSync(path.join(srcDir, 'model-picker.js'), 'utf8');
+  const fnMatch = raw.match(/const STANDARD_TIERS =[\s\S]*?function buildCatalog\(items, source = 'cli'\) \{[\s\S]*?\n  \}/);
+  assert.ok(fnMatch, 'model-picker catalog helpers must exist');
+  const { parseModelOption, buildCatalog } = vm.runInNewContext(`(() => {\nconst clean = s => (s || '').replace(/\\s+/g, ' ').trim();\n${fnMatch[0]}\nreturn { parseModelOption, buildCatalog };\n})()`);
+
+  // 兼容 Antigravity 2.35.2 span 拼接格式与徽标后缀
+  const p1 = parseModelOption('Gemini 4 NeonMediumNew', true);
+  assert.equal(p1.base, 'Gemini 4 Neon');
+  assert.equal(p1.provider, 'Google');
+  assert.equal(p1.tier.key, 'medium');
+
+  const p2 = parseModelOption('Gemini 3.8 Flash Medium 即将下线', true);
+  assert.equal(p2.base, 'Gemini 3.8 Flash');
+  assert.equal(p2.tier.key, 'medium');
+
+  const p3 = parseModelOption('Gemini 4 Neon (XHigh)', false);
+  assert.equal(p3.base, 'Gemini 4 Neon');
+  assert.equal(p3.tier.peak, true);
+
+  // 真实 agy models 格式：过滤 "Fetching available models..." 杂讯行，精确区分 4 / 3 / 1 档
+  const { parseAgyModelsOutput } = require(path.join(srcDir, 'model-catalog.cjs'));
+  const parsedList = parseAgyModelsOutput([
+    'Fetching available models...',
+    'gemini-4-neon-low\tGemini 4 Neon (Low)',
+    'gemini-4-neon-medium\tGemini 4 Neon (Medium)',
+    'gemini-4-neon-high\tGemini 4 Neon (High)',
+    'gemini-4-neon-xhigh\tGemini 4 Neon (XHigh)',
+    'gemini-4-carbon-low\tGemini 4 Carbon (Low)',
+    'gemini-4-carbon-medium\tGemini 4 Carbon (Medium)',
+    'gemini-4-carbon-high\tGemini 4 Carbon (High)',
+    'gpt-oss-120b-medium\tGPT-OSS 120B (Medium)'
+  ].join('\n'));
+  assert.equal(parsedList.length, 8);
+  const catalog = buildCatalog(parsedList, 'cli');
+  assert.equal(catalog.length, 3);
+  assert.equal(catalog[0].base, 'Gemini 4 Neon');
+  assert.equal(catalog[0].efforts.length, 4);
+  assert.equal(catalog[0].efforts[3].peak, true);
+  assert.equal(catalog[1].base, 'Gemini 4 Carbon');
+  assert.equal(catalog[1].efforts.length, 3);
+  assert.equal(catalog[2].base, 'GPT-OSS 120B');
+  assert.equal(catalog[2].efforts.length, 1);
+
+  // DOM 一级菜单兜底：单行模型不会退化成 1 档无滑条，固定括号单档模型保持 1 档
+  const domCatalog = buildCatalog([
+    { text: 'Gemini 4 Neon High New', hasSubmenu: false },
+    { text: 'Gemini 4 Carbon Medium New', hasSubmenu: true },
+    { text: 'GPT-OSS 120B (Medium)', hasSubmenu: false }
+  ], 'dom');
+  assert.equal(domCatalog[0].efforts.length, 4);
+  assert.equal(domCatalog[1].efforts.length, 3);
+  assert.equal(domCatalog[2].efforts.length, 1);
 });

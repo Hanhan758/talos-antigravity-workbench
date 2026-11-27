@@ -1,4 +1,4 @@
-((css, initialCustomCss, initialMode, initialLang, initialQuota, initialFont, initialWidth, initialSend, initialNotify, initialAccount) => {
+((css, initialCustomCss, initialMode, initialLang, initialQuota, initialFont, initialWidth, initialSend, initialNotify, initialPicker, initialAccount) => {
   'use strict';
   if (window !== window.top || !document.body || location.protocol !== 'https:' || location.hostname !== '127.0.0.1' ||
       !location.port || typeof window.electronNative?.getZoomLevel !== 'function' ||
@@ -15,6 +15,7 @@
   const validWidth = v => ['default','focus','wide','full'].includes(v);
   const validSend = v => v==='enter' || v==='cmd-enter';
   const validNotify = v => v==='on' || v==='off';
+  const validPicker = v => v==='codex' || v==='native';
   const style = document.createElement('style');
   style.id = 'ag-local-appearance-style';
   style.textContent = css;
@@ -30,7 +31,8 @@
   let currentWidth = validWidth(initialWidth) ? initialWidth : 'default';
   let currentSend = validSend(initialSend) ? initialSend : 'enter';
   let currentNotify = validNotify(initialNotify) ? initialNotify : 'on';
-  let pending = null, saveError = false, pendingLang = null, langSaveError = false, pendingQuota = null, quotaSaveError = false, pendingFont = null, fontSaveError = false, pendingWidth = null, widthSaveError = false, pendingSend = null, sendSaveError = false, pendingNotify = null, notifySaveError = false, settingAnchor = null;
+  let currentPicker = validPicker(initialPicker) ? initialPicker : 'codex';
+  let pending = null, saveError = false, pendingLang = null, langSaveError = false, pendingQuota = null, quotaSaveError = false, pendingFont = null, fontSaveError = false, pendingWidth = null, widthSaveError = false, pendingSend = null, sendSaveError = false, pendingNotify = null, notifySaveError = false, pendingPicker = null, pickerSaveError = false, settingAnchor = null;
   const scheme = matchMedia('(prefers-color-scheme: dark)');
   const shown = el => el?.isConnected && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
 
@@ -130,6 +132,15 @@
     renderSettingsRows();
     try { window.__agLocalAppearanceChanged?.('notify'); } catch {}
   }
+  function choosePicker(next) {
+    if(!validPicker(next) || next===currentPicker && !pickerSaveError) return;
+    currentPicker=next;
+    pendingPicker={id:crypto.randomUUID(),picker:next};
+    pickerSaveError=false;
+    try { window.__agModelPicker?.setEnabled?.(next === 'codex'); } catch {}
+    renderSettingsRows();
+    try { window.__agLocalAppearanceChanged?.('picker'); } catch {}
+  }
   const account=(__AG_ACCOUNT_FOOTER__)({choose,getMode:()=>current,getLang:()=>currentLang,getSettings:()=>layout.settingsTarget(settingAnchor),names,namesEn,initialAccount});
   const side=account.element,cardSlot=document.createElement('span');
   cardSlot.id='ag-local-theme-card-slot';cardSlot.append(account.cardToggle);
@@ -216,6 +227,7 @@
   const widthCtl=makePillRow('aw-settings-width-row',['default','focus','wide','full'],chooseWidth);
   const sendCtl=makePillRow('aw-settings-send-row',['enter','cmd-enter'],chooseSend);
   const notifyCtl=makePillRow('aw-settings-notify-row',['on','off'],chooseNotify);
+  const pickerCtl=makePillRow('aw-settings-picker-row',['codex','native'],choosePicker);
 
   const setText=(el,val)=>{if(el.textContent!==val)el.textContent=val;};
   const setAttr=(el,k,val)=>{if(el.getAttribute(k)!==val)el.setAttribute(k,val);};
@@ -267,6 +279,9 @@
     const nLabel=zh?'任务完成通知':'Task Notifications';
     setText(notifyCtl.label,nLabel);setAttr(notifyCtl.group,'aria-label',nLabel);
     for(const [c,btn] of notifyCtl.map){setAttr(btn,'aria-checked',String(c===currentNotify));setText(btn,c==='on'?(zh?'开启':'On'):(zh?'关闭':'Off'));}
+    const pLabel=zh?'模型选择器':'Model Picker';
+    setText(pickerCtl.label,pLabel);setAttr(pickerCtl.group,'aria-label',pLabel);
+    for(const [c,btn] of pickerCtl.map){setAttr(btn,'aria-checked',String(c===currentPicker));setText(btn,c==='codex'?(zh?'Codex 炫酷':'Codex'):(zh?'原版':'Native'));}
   }
 
   function findAppearanceCard() {
@@ -299,7 +314,7 @@
 
   function mountSettingsRows() {
     renderSettingsRows();
-    if(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected && widthCtl.row.isConnected && sendCtl.row.isConnected && notifyCtl.row.isConnected) return;
+    if(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected && widthCtl.row.isConnected && sendCtl.row.isConnected && notifyCtl.row.isConnected && pickerCtl.row.isConnected) return;
     if(!/settings/i.test(location.pathname+location.hash) &&
        !document.querySelector('dialog[open],[role="dialog"],[aria-modal="true"],[data-testid*="settings"],[class~="group/nav-item"]')) return;
     const target=findAppearanceCard();
@@ -308,14 +323,14 @@
     const cs=getComputedStyle(nativeThemeRow);
     const padL=cs.paddingLeft, padR=cs.paddingRight;
     if(padL && padL!=='0px') {
-      for(const r of [themeRow,langRow,quotaRow,fontRow,widthCtl.row,sendCtl.row,notifyCtl.row]) {
+      for(const r of [themeRow,langRow,quotaRow,fontRow,widthCtl.row,sendCtl.row,notifyCtl.row,pickerCtl.row]) {
         r.style.paddingLeft=padL; r.style.paddingRight=padR||padL;
       }
     }
     if(themeRow.parentElement!==card || themeRow.previousElementSibling!==nativeThemeRow) {
       nativeThemeRow.insertAdjacentElement('afterend',themeRow);
     }
-    const chain=[lastRow,langRow,quotaRow,fontRow,widthCtl.row,sendCtl.row,notifyCtl.row];
+    const chain=[lastRow,langRow,quotaRow,fontRow,widthCtl.row,sendCtl.row,notifyCtl.row,pickerCtl.row];
     for(let i=1;i<chain.length;i++) {
       if(chain[i].parentElement!==card || chain[i].previousElementSibling!==chain[i-1]) {
         chain[i-1].insertAdjacentElement('afterend',chain[i]);
@@ -379,7 +394,7 @@
     if(!style.isConnected) document.head.append(style);
   }
   layout.setRefresh(mount);
-  function reconcile(mode,ack=null,failed=false,lang=null,langAck=null,langFailed=false,quota=null,quotaAck=null,quotaFailed=false,font=null,fontAck=null,fontFailed=false,width=null,widthAck=null,widthFailed=false,send=null,sendAck=null,sendFailed=false,notify=null,notifyAck=null,notifyFailed=false) {
+  function reconcile(mode,ack=null,failed=false,lang=null,langAck=null,langFailed=false,quota=null,quotaAck=null,quotaFailed=false,font=null,fontAck=null,fontFailed=false,width=null,widthAck=null,widthFailed=false,send=null,sendAck=null,sendFailed=false,notify=null,notifyAck=null,notifyFailed=false,picker=null,pickerAck=null,pickerFailed=false) {
     if(ack && pending?.id===ack) { if(failed) saveError=true; else {pending=null;saveError=false;} }
     if(!pending && valid(mode)) current=mode;
     if(langAck && pendingLang?.id===langAck) { if(langFailed) langSaveError=true; else {pendingLang=null;langSaveError=false;} }
@@ -394,6 +409,8 @@
     if(!pendingSend && validSend(send) && send!==currentSend) { currentSend=send; try { window.__agWorkbenchExtras?.setSendShortcut?.(send); } catch {} }
     if(notifyAck && pendingNotify?.id===notifyAck) { if(notifyFailed) notifySaveError=true; else {pendingNotify=null;notifySaveError=false;} }
     if(!pendingNotify && validNotify(notify) && notify!==currentNotify) currentNotify=notify;
+    if(pickerAck && pendingPicker?.id===pickerAck) { if(pickerFailed) pickerSaveError=true; else {pendingPicker=null;pickerSaveError=false;} }
+    if(!pendingPicker && validPicker(picker) && picker!==currentPicker) { currentPicker=picker; try { window.__agModelPicker?.setEnabled?.(picker === 'codex'); } catch {} }
     paint(); mount();
   }
   function snapshot() {
@@ -402,7 +419,7 @@
     const composer=document.querySelector('[id="antigravity.agentSidePanelInputBox"]');
     const selector=composer?.querySelector('[data-testid="model-selector-trigger"]');
     const paragraph=[...document.querySelectorAll('[data-markdown-root] p,.prose p,.markdown p')].find(shown);
-    return {mode:current,lang:currentLang,quota:currentQuota,font:currentFont,width:currentWidth,send:currentSend,notify:currentNotify,tone:tone(), pending, pendingLang, pendingQuota, pendingFont, pendingWidth, pendingSend, pendingNotify, structure:layout.status(), settingsRowHidden:!!settingAnchor?.isConnected && !shown(settingAnchor), settingsInjected:!!(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected && widthCtl.row.isConnected && sendCtl.row.isConnected && notifyCtl.row.isConnected), account:account.info(), sidebar:!!shown(side), cardEntry:!!cardSlot.isConnected,
+    return {mode:current,lang:currentLang,quota:currentQuota,font:currentFont,width:currentWidth,send:currentSend,notify:currentNotify,picker:currentPicker,tone:tone(), pending, pendingLang, pendingQuota, pendingFont, pendingWidth, pendingSend, pendingNotify, pendingPicker, structure:layout.status(), settingsRowHidden:!!settingAnchor?.isConnected && !shown(settingAnchor), settingsInjected:!!(themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected && widthCtl.row.isConnected && sendCtl.row.isConnected && notifyCtl.row.isConnected && pickerCtl.row.isConnected), account:account.info(), sidebar:!!shown(side), cardEntry:!!cardSlot.isConnected,
       pageColor:styles.getPropertyValue('--background').trim().slice(0,64),
       sidebarColor:styles.getPropertyValue('--sidebar').trim().slice(0,64),
       composerColor:composer?getComputedStyle(composer).backgroundColor:null,
@@ -414,7 +431,7 @@
   }
   let settingsMountTimer=null;
   const settingsObserver=new MutationObserver(mutations=>{
-    if(settingsMountTimer || (themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected && widthCtl.row.isConnected && sendCtl.row.isConnected && notifyCtl.row.isConnected)) return;
+    if(settingsMountTimer || (themeRow.isConnected && langRow.isConnected && quotaRow.isConnected && fontRow.isConnected && widthCtl.row.isConnected && sendCtl.row.isConnected && notifyCtl.row.isConnected && pickerCtl.row.isConnected)) return;
     const external=mutations.some(m=>!(m.target instanceof Element && m.target.closest?.('[data-aw-owned]')));
     if(!external) return;
     settingsMountTimer=setTimeout(()=>{settingsMountTimer=null;mountSettingsRows();},140);
@@ -431,4 +448,4 @@
   }
   window.__agLocalAppearance=Object.freeze({reconcile,snapshot,takeProfile:account.take,acceptProfile:account.cache,setCustomCss});
   paint(); mount(); return snapshot();
-})(__AG_APPEARANCE_CSS__,__AG_CUSTOM_CSS__,__AG_INITIAL_APPEARANCE__,__AG_INITIAL_LANG__,__AG_INITIAL_QUOTA__,__AG_INITIAL_FONT__,__AG_INITIAL_WIDTH__,__AG_INITIAL_SEND__,__AG_INITIAL_NOTIFY__,__AG_ACCOUNT_CONTEXT__)
+})(__AG_APPEARANCE_CSS__,__AG_CUSTOM_CSS__,__AG_INITIAL_APPEARANCE__,__AG_INITIAL_LANG__,__AG_INITIAL_QUOTA__,__AG_INITIAL_FONT__,__AG_INITIAL_WIDTH__,__AG_INITIAL_SEND__,__AG_INITIAL_NOTIFY__,__AG_INITIAL_PICKER__,__AG_ACCOUNT_CONTEXT__)
